@@ -1,0 +1,2236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="theme-color" content="#0d1220"/>
+<title>旋转迷宫 · Rotate Maze</title>
+<style>
+:root{ --st: env(safe-area-inset-top,0px); --sb: env(safe-area-inset-bottom,0px); }
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden}
+body{position:fixed;inset:0;background:#0d1220;color:#e8edf7;
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans SC","Microsoft YaHei",sans-serif;
+  touch-action:none;overscroll-behavior:none;user-select:none;-webkit-user-select:none}
+#game{position:absolute;inset:0;width:100%;height:100%;display:block}
+
+/* ---- HUD 顶栏 ---- */
+#hud{position:absolute;left:0;right:0;top:calc(var(--st) + 6px);display:flex;gap:8px;align-items:center;
+  padding:0 10px;z-index:5;pointer-events:none;transition:opacity .3s}
+#hud.hidden{opacity:0}
+.pill{background:rgba(20,28,46,.72);border:1px solid rgba(120,140,190,.22);border-radius:999px;
+  padding:6px 12px;font-size:13px;letter-spacing:.5px;backdrop-filter:blur(6px);white-space:nowrap;color:#cfe0ff}
+#hud-timer{font-variant-numeric:tabular-nums;font-size:14px}
+#hud-stars{color:#8fa0c5;display:flex;gap:3px;align-items:center}
+#hud-stars .s{font-size:15px;transition:.25s}
+#hud-stars .s.got{color:#ffd54a;text-shadow:0 0 8px rgba(255,213,74,.7)}
+.spacer{flex:1}
+.ibtn{pointer-events:auto;background:rgba(20,28,46,.72);border:1px solid rgba(120,140,190,.22);
+  color:#cfe0ff;border-radius:999px;min-width:40px;height:34px;padding:0 10px;font-size:14px;
+  backdrop-filter:blur(6px);cursor:pointer}
+.ibtn:active{transform:scale(.94);background:rgba(46,60,94,.85)}
+
+/* ---- 浮层通用 ---- */
+.overlay{position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;
+  background:rgba(8,11,20,.62);backdrop-filter:blur(8px);opacity:1;transition:opacity .35s}
+.overlay.hidden{opacity:0;pointer-events:none}
+.panel{background:linear-gradient(160deg,#1a2340,#141b30);border:1px solid rgba(130,150,205,.25);
+  border-radius:22px;padding:32px 28px;max-width:350px;width:88%;text-align:center;
+  box-shadow:0 24px 60px rgba(0,0,0,.55)}
+h1{font-size:30px;letter-spacing:2px;margin-bottom:6px;
+  background:linear-gradient(90deg,#ffd98f,#ff9d3d);-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{color:#8fa0c5;font-size:13px;margin-bottom:16px;letter-spacing:2px}
+.big-btn{margin-top:16px;width:100%;padding:14px;font-size:17px;letter-spacing:4px;border:none;border-radius:14px;
+  background:linear-gradient(135deg,#ffb14d,#ff8a2a);color:#241303;font-weight:700;cursor:pointer;
+  box-shadow:0 8px 24px rgba(255,140,40,.35)}
+.big-btn:active{transform:scale(.97)}
+.ghost-btn{margin-top:10px;width:100%;padding:11px;font-size:14px;border-radius:12px;cursor:pointer;
+  background:transparent;border:1px solid rgba(140,160,210,.3);color:#cfe0ff}
+.hints{color:#9db0d8;font-size:12.5px;line-height:2.1;text-align:left;margin:14px auto 0;max-width:260px}
+#mode-info{font-size:12.5px;color:#7fe3b0;margin-bottom:6px;min-height:18px}
+.result-stars{font-size:34px;letter-spacing:8px;margin:10px 0 4px}
+.result-stars .s{color:#3a4664}
+.result-stars .s.got{color:#ffd54a;text-shadow:0 0 12px rgba(255,213,74,.8)}
+.result-line{display:flex;justify-content:space-between;color:#aebde0;font-size:14px;margin:7px 4px}
+.result-line b{color:#fff;font-variant-numeric:tabular-nums}
+
+
+/* ---- 关卡横幅 / 提示 ---- */
+#banner{position:absolute;top:calc(var(--st) + 66px);left:0;right:0;text-align:center;z-index:6;
+  pointer-events:none;opacity:0;transition:opacity .4s}
+#banner.show{opacity:1}
+#banner-name{font-size:19px;letter-spacing:3px;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.6)}
+#banner-hint{font-size:12.5px;color:#9db0d8;margin-top:6px;letter-spacing:1px}
+#toast{position:absolute;bottom:calc(var(--sb) + 132px);left:50%;transform:translateX(-50%);
+  background:rgba(18,25,42,.92);border:1px solid rgba(120,140,190,.3);color:#dfe8ff;padding:10px 18px;
+  border-radius:999px;font-size:13px;z-index:9;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
+#toast.show{opacity:1}
+
+/* ---- 选关界面 ---- */
+.panel-wide{max-width:min(92vw,470px)}
+#lv-progress{color:#8fa0c5;font-size:12.5px;margin-top:2px;letter-spacing:.5px}
+#lv-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:14px 0 4px}
+.lv-theme{grid-column:1/-1;text-align:left;font-size:11px;color:#7f90b5;letter-spacing:3px;margin:7px 0 -1px}
+.lv-btn{position:relative;height:46px;border-radius:9px;border:1px solid rgba(120,140,190,.25);
+  background:rgba(28,38,62,.8);color:#cfe0ff;font-size:13.5px;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:0}
+.lv-btn .st{font-size:7px;letter-spacing:1.5px;color:#3a4664;line-height:1}
+.lv-btn .st .got{color:#ffd54a}
+.lv-btn.done{border-color:rgba(61,220,151,.45);background:rgba(23,44,41,.8)}
+.lv-btn.cur{border-color:#ffb14d;box-shadow:0 0 12px rgba(255,177,77,.35);background:rgba(62,43,21,.85)}
+.lv-btn.lock{opacity:.30;cursor:default}
+.lv-btn:not(.lock):active{transform:scale(.92)}
+
+#rotation-controls{position:absolute;bottom:calc(var(--sb) + 12px);left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:22px;z-index:7}
+#rotation-controls[hidden]{display:none}
+#rotation-controls button{width:66px;height:60px;border-radius:18px;border:1px solid #677499;background:#1b2842;color:#ffd98f;font-size:36px;cursor:pointer;touch-action:none}
+#rotation-controls button:active,#rotation-controls button.held{background:#594126;border-color:#ffb14d}
+#rotation-controls div{min-width:120px;text-align:center}
+#rotation-controls strong{display:block;color:#7fe3b0;font-size:14px}
+#rotation-controls span{display:block;color:#ffd98f;font-size:17px;font-variant-numeric:tabular-nums}
+#rotation-controls small{color:#8fa0c5;font-size:11px}
+.panel{max-height:90dvh;overflow-y:auto;touch-action:pan-y}
+@media(max-width:400px){#hud{gap:4px;padding:0 6px}.pill{padding:6px 7px;font-size:11px}.ibtn{min-width:32px;padding:0 7px}#banner-hint{padding:0 16px}}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud" class="hidden">
+  <div class="pill" id="hud-level">—</div>
+  <div class="pill" id="hud-timer">0:00.0</div>
+  <div class="pill" id="hud-stars"><span class="s">★</span><span class="s">★</span><span class="s">★</span></div>
+  <div class="spacer"></div>
+  <button class="ibtn" id="btn-levels" title="选择关卡">☰</button>
+  <button class="ibtn" id="btn-sound" title="声音">♪</button>
+  <button class="ibtn" id="btn-pause" title="暂停">Ⅱ</button>
+  <button class="ibtn" id="btn-restart" title="重玩本关">↺</button>
+</div>
+
+<div id="banner">
+  <div id="banner-name"></div>
+  <div id="banner-hint"></div>
+</div>
+
+
+
+<div id="screen-start" class="overlay">
+  <div class="panel">
+    <h1>旋转迷宫</h1>
+    <div class="sub">ROTATE MAZE · 重力不变，转动世界</div>
+    <div id="mode-info">↓ 重力始终向下 · 地图可连续旋转 360°</div>
+    <button id="btn-start" class="big-btn">开 始 游 戏</button>
+    <div class="hints">
+      · 旋转地图，让小球沿重力滚向终点<br>
+      · 50 关十大主题：回廊 / 黑洞 / 冰原 / 深渊 / 巡逻 / 弹射 / 时空 / 崩塌 / 闸门 / 终局<br>
+      · 收集 ★，避开机关：黑洞、迷雾、巡逻块、崩塌地板与闸门<br>
+      · 按住 ↶ / ↷ 旋转，松开即停；拖动地图也可旋转<br>
+      · 电脑用 ← → / A D，Shift 慢转；空格暂停
+    </div>
+  </div>
+</div>
+
+<div id="screen-levels" class="overlay hidden">
+  <div class="panel panel-wide">
+    <div class="sub">LEVEL SELECT</div>
+    <h1 style="font-size:24px">选择关卡</h1>
+    <div id="lv-progress">—</div>
+    <div id="lv-grid"></div>
+    <button id="btn-lv-back" class="ghost-btn">返回</button>
+  </div>
+</div>
+
+<div id="screen-clear" class="overlay hidden">
+  <div class="panel">
+    <div class="sub">LEVEL CLEAR</div>
+    <h1 style="font-size:24px">关卡完成</h1>
+    <div class="result-stars" id="clear-stars"><span class="s">★</span><span class="s">★</span><span class="s">★</span></div>
+    <div class="result-line"><span>用时</span><b id="clear-time">--</b></div>
+    <div class="result-line"><span>失误</span><b id="clear-deaths">0</b></div>
+    <div class="result-line"><span>本关最佳</span><b id="clear-best">--</b></div>
+    <button id="btn-next" class="big-btn">下一关</button>
+    <button id="btn-replay" class="ghost-btn">重玩本关</button>
+    <button id="btn-select" class="ghost-btn">选择关卡</button>
+  </div>
+</div>
+
+<div id="screen-end" class="overlay hidden">
+  <div class="panel">
+    <div class="sub">ALL CLEAR</div>
+    <h1 style="font-size:26px">全部通关！</h1>
+    <div class="result-stars" id="end-stars"><span class="s">★</span><span class="s">★</span><span class="s">★</span><span class="s">★</span><span class="s">★</span><span class="s">★</span><span class="s">★</span><span class="s">★</span></div>
+    <div class="result-line"><span>总用时</span><b id="end-time">--</b></div>
+    <div class="result-line"><span>总失误</span><b id="end-deaths">--</b></div>
+    <button id="btn-again" class="big-btn">再来一轮</button>
+  </div>
+</div>
+
+<div id="screen-pause" class="overlay hidden">
+  <div class="panel">
+    <div class="sub">PAUSED</div>
+    <h1 style="font-size:24px">已暂停</h1>
+    <button id="btn-resume" class="big-btn">继续游戏</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<div id="rotation-controls" hidden>
+  <button id="rotate-left" aria-label="逆时针旋转">↶</button>
+  <div><strong>↓ 重力向下</strong><span id="rotation-angle">0°</span><small>按住旋转 · 松开停止</small></div>
+  <button id="rotate-right" aria-label="顺时针旋转">↷</button>
+</div>
+
+<script>
+'use strict';
+/* 旋转迷宫：保留原版 50 关与机关，在地图坐标中投影屏幕向下的重力。 */
+
+/* ---------- 工具 ---------- */
+const $ = id => document.getElementById(id);
+const clamp = (v,a,b) => v<a?a:(v>b?b:v);
+const lerp = (a,b,t) => a+(b-a)*t;
+const TAU = Math.PI*2;
+
+/* ---------- 画布 ---------- */
+const cv = $('game'), ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2.5);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = Math.round(W*DPR); cv.height = Math.round(H*DPR);
+  cv.style.width = W+'px'; cv.style.height = H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  layout();
+}
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', ()=>setTimeout(resize,120));
+
+/* ---------- 音效（WebAudio 合成，无外部资源） ---------- */
+const AU = {
+  ctx:null,
+  on: localStorage.getItem('rotate_maze_sound') !== '0',
+  init(){
+    if(!this.ctx){ try{ this.ctx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }
+    if(this.ctx && this.ctx.state==='suspended') this.ctx.resume();
+  },
+  beep(f0,f1,dur,type,vol,delay){
+    if(!this.on || !this.ctx) return;
+    type = type||'sine'; vol = vol||0.16; delay = delay||0;
+    const t = this.ctx.currentTime + delay;
+    const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(Math.max(30,f0), t);
+    if(f1 && f1!==f0) o.frequency.exponentialRampToValueAtTime(Math.max(30,f1), t+dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t+0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    o.connect(g); g.connect(this.ctx.destination);
+    o.start(t); o.stop(t+dur+0.05);
+  },
+  star(){ this.beep(880,1318,0.14,'sine',0.18); this.beep(1318,1760,0.18,'sine',0.13,0.07); },
+  fall(){ this.beep(340,70,0.5,'sawtooth',0.10); },
+  win(){ [523,659,784,1047].forEach((f,i)=>this.beep(f,f*1.02,0.16,'triangle',0.15,i*0.09)); },
+  hazard(){ this.beep(220,90,0.22,'square',0.20); },
+  check(){ this.beep(660,990,0.16,'sine',0.15); },
+  portal(){ this.beep(300,980,0.26,'sine',0.16); this.beep(980,320,0.2,'sine',0.10,0.1); },
+  boost(){ this.beep(220,640,0.15,'sawtooth',0.08); },
+  crumble(){ this.beep(200,55,0.28,'square',0.12); this.beep(120,40,0.2,'sawtooth',0.07,0.03); },
+  click(){ this.beep(520,540,0.06,'sine',0.09); },
+  bump(v){ this.beep(90+40*v,60,0.05,'square',clamp(0.03+v*0.06,0.03,0.14)); }
+};
+
+/* ---------- 关卡系统（50 关 = 10 主题区 × 5 关） ----------
+ * 手工锚点关（1/11/21/31/41）由种子化生成器之外的固定地图定义，其余 45 关由
+ * 生成器产出：mulberry32 确定性随机 → 布墙/开房间 → 连通
+ * 性修复 → 按 S→G 最短路放置要素 → verifyLevelData BFS 校验，
+ * 不合格换种子重试（tools/verify-maps.js 在 Node 里跑全量校验）
+ * 地图字符：# 墙  . 地板  S 起点  G 终点  * 星星  O 黑洞  I 冰面  C 检查点
+ *           1-4 传送门（同数字成对）  ^v<> 弹射带方向  T/t 定时闸门（反相两组）
+ * hazards: r=所在行  x0..x1=巡逻左边缘范围  T=周期(秒)  ph=相位
+ * fog:     迷雾视野半径（格，0=无迷雾；深渊区 L16-20）——纯渲染层
+ * crumble: 踩过地板的碎裂延迟（秒，0=无崩塌；崩塌区 L36-40）——运行时格子
+ *          状态机（起点/终点/检查点/星星/弹射带/传送门格永不碎；死亡全场复位）
+ * -------------------------------------------------------------- */
+/*LEVELSYS-START*/
+const TOTAL_LEVELS = 50;
+
+/* 手工教学关（每主题第一关） */
+const HAND_LEVELS = [
+{
+  slot:1,
+  name:'初识回廊',
+  hint:'旋转地图，把小球滚到绿色终点',
+  map:[
+    '###########',
+    '#S........#',
+    '###.#####.#',
+    '###*#####.#',
+    '###.#####.#',
+    '#.........#',
+    '#.#######.#',
+    '#.#######*#',
+    '#.#########',
+    '#.........#',
+    '#########.#',
+    '#####*###.#',
+    '#####.###.#',
+    '#.G.......#',
+    '###########'
+  ],
+  hazards:[]
+},
+{
+  slot:11,
+  name:'冰面初见',
+  hint:'冰面上刹不住车，小心黑洞与检查点',
+  map:[
+    '###########',
+    '#S..O....*#',
+    '#.....O...#',
+    '#..O...O..#',
+    '#####.#####',
+    '#IIIICIIII#',
+    '#IIOIIIOII#',
+    '#IIIIIIII*#',
+    '#.#########',
+    '#C*..O....#',
+    '#...O..O..#',
+    '#.O....O..#',
+    '#....O....#',
+    '#.....O.G.#',
+    '###########'
+  ],
+  hazards:[]
+},
+{
+  slot:21,
+  name:'巡逻初现',
+  hint:'红色巡逻块会把你撞飞，善用检查点',
+  map:[
+    '###########',
+    '#S....O..*#',
+    '#..O.....O#',
+    '#.......O.#',
+    '#####.#####',
+    '#.........#',
+    '#########.#',
+    '#...O....C#',
+    '#.O...O...#',
+    '#*...O....#',
+    '#.#########',
+    '#.........#',
+    '#.........#',
+    '#########.#',
+    '#*.....O..#',
+    '#....O....#',
+    '#.G.O.....#',
+    '###########'
+  ],
+  hazards:[
+    { r:5,  x0:1,   x1:8,   T:4,   ph:0   },
+    { r:11, x0:2,   x1:4.5, T:2.5, ph:0   },
+    { r:12, x0:4.5, x1:7.2, T:2.5, ph:0.5 }
+  ]
+},
+{
+  slot:31,
+  name:'时空之门',
+  hint:'同色传送门互相连通，速度会保留',
+  map:[
+    '###########',
+    '#S..#....1#',
+    '#*#.#.##..#',
+    '#.#.#..#..#',
+    '#.#.##.#.##',
+    '#.#....#..#',
+    '#.####.#..#',
+    '#*...#.#..#',
+    '##.#.#.#..#',
+    '#1.#.#.#..#',
+    '#..#.#.#..#',
+    '#.##.#.#..#',
+    '#....#.#*.#',
+    '#.#....#G.#',
+    '###########'
+  ],
+  hazards:[]
+},
+{
+  slot:41,
+  name:'闸门节奏',
+  hint:'琥珀色闸门定时开合，看准节奏通过',
+  map:[
+    '###########',
+    '#S...T....#',
+    '#.###.###.#',
+    '#.#*#.#.#.#',
+    '#.#.#.#.#.#',
+    '#.#.#...#.#',
+    '#.#.###.#.#',
+    '#.#...t.#.#',
+    '#.###.###.#',
+    '#...T...*.#',
+    '#.###.###.#',
+    '#*....T.G.#',
+    '###########'
+  ],
+  hazards:[]
+}
+];
+
+/* 主题定义（每 5 关一区，索引 = ceil(n/5)-1）——新机制在每区第 1 关引入 */
+const TIERS = [
+  { theme:'回廊', hint:'旋转收集星星，抵达终点' },
+  { theme:'黑洞', hint:'避开黑洞，别掉下去' },
+  { theme:'冰原', hint:'冰面极滑，提前很久减速' },
+  { theme:'深渊', hint:'黑暗中循光前行，检查点亮起时照亮四周' },
+  { theme:'巡逻', hint:'巡逻块撞飞不致死，抓准时机' },
+  { theme:'弹射', hint:'弹射带高速冲刺，顺势而为' },
+  { theme:'时空', hint:'传送门瞬移，规划捷径' },
+  { theme:'崩塌', hint:'踩过的地板会碎裂，果断前行莫回头' },
+  { theme:'闸门', hint:'闸门开合有时，看准节奏' },
+  { theme:'终局', hint:'全机制终极考验' }
+];
+
+/* ---- 确定性随机：同关卡在所有设备上生成结果一致 ---- */
+function mulberry32(seed){
+  return function(){
+    let t = (seed += 0x6D2B79F5) | 0;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function levelSeed(n, att){ return ((n * 2654435761) ^ (att * 0x9E3779B1)) >>> 0; }
+
+/* ---- 难度曲线：每 5 关一区（10 区），区内序号 1..5，区首难度回落重蓄 ---- */
+function levelParams(n){
+  const tier = Math.min(10, Math.ceil(n/5));            // 主题区 1..10
+  const k    = ((n-1) % 5) + 1;                         // 区内序号 1..5
+  const p    = (n-1) / 49;                              // 全局进度 0..1
+  const cols = 11 + Math.floor((tier-1)/2);             // 11 → 15
+  const rows = 13 + Math.floor((tier-1)*2/3);           // 13 → 19
+  const H = [0, k, 2+k, 2+(k>>1), 2+(k>>1), 3+(k>>1), 4+(k>>1), 2+(k>>1), 1+(k>>1), 6+(k>>1)];
+  return {
+    n, tier, k, p, cols, rows,
+    wallBlobs: Math.round(6 + cols*rows/45 + p*8),
+    scatter: 0.10 + p*0.08,
+    holes: H[tier-1],
+    fog: tier===4 ? +(4.6-(k-1)*0.45).toFixed(2) : 0,     // 深渊=迷雾视野半径 4.6→2.8 格
+    crumble: tier===8 ? +(1.3-(k-1)*0.10).toFixed(2) : 0, // 崩塌=踩过地板碎裂延迟 1.3→0.9 秒
+    iceSeeds: (tier===3 ? Math.min(6, 1+Math.floor(k*0.8)) :       // 冰原
+               tier===10 ? 3 : 0),                                 // 终局混入冰面
+    iceR: tier===10 ? 1 : 2,
+    checks: tier>=3 ? (tier===4 || tier===8 ? 2 : (k>=4 ? 2 : 1)) : 0,
+    hazards: tier===5 ? Math.min(4, k) :                            // 巡逻区 1→4
+              tier===9 ? (k>=3 ? 2 : 1) :                           // 闸门区混入巡逻
+              tier===10 ? 2+(k>>1) : 0,
+    hzT: Math.max(2.2, 4.2 - p*1.6),                    // 巡逻周期渐快
+    portals: tier===7 ? (k<3 ? 1 : 2) : (tier===10 ? (k>=3 ? 2 : 1) : 0),
+    boosts:  tier===6 ? Math.min(6, 2+k) :                           // 弹射区 3→6
+              tier===7 ? 2 :
+              tier===8 ? 2 :
+              tier===9 ? (k>=3 ? 2 : 1) :
+              tier===10 ? Math.min(4, 2+(k>>1)) : 0,
+    gates:   tier===9 ? Math.min(5, k) :                             // 闸门区 1→5
+              tier===10 ? Math.min(5, 1+k) : 0
+  };
+}
+
+/* ---- 生成器内部工具（纯函数，可被 Node 工具直接执行） ---- */
+function bfsGrid(g, from){
+  const H = g.length, W = g[0].length;
+  const dist = Array.from({length:H}, () => new Array(W).fill(-1));
+  const q = [[from.x, from.y]];
+  dist[from.y][from.x] = 0;
+  while(q.length){
+    const [x, y] = q.shift();
+    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx = x+dx, ny = y+dy;
+      if(nx<0 || ny<0 || nx>=W || ny>=H) continue;
+      if(g[ny][nx]===1 || dist[ny][nx]>=0) continue;
+      dist[ny][nx] = dist[y][x] + 1;
+      q.push([nx, ny]);
+    }
+  }
+  return dist;
+}
+function labelFloor(g){
+  const H = g.length, W = g[0].length;
+  const lab = Array.from({length:H}, () => new Array(W).fill(-1));
+  let count = 0;
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    if(g[y][x]!==0 || lab[y][x]>=0) continue;
+    const q = [[x,y]];
+    lab[y][x] = count;
+    while(q.length){
+      const [cx,cy] = q.shift();
+      for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+        const nx = cx+dx, ny = cy+dy;
+        if(nx<0 || ny<0 || nx>=W || ny>=H) continue;
+        if(g[ny][nx]===0 && lab[ny][nx]<0){ lab[ny][nx] = count; q.push([nx,ny]); }
+      }
+    }
+    count++;
+  }
+  return { lab, count };
+}
+/* 打通分隔两片区域的墙，保证全场连通 */
+function ensureConnected(g, rng){
+  for(let iter=0; iter<300; iter++){
+    const { lab, count } = labelFloor(g);
+    if(count <= 1) return true;
+    const cands = [];
+    for(let y=1;y<g.length-1;y++) for(let x=1;x<g[0].length-1;x++){
+      if(g[y][x]!==1) continue;
+      const s = new Set();
+      for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+        const nx = x+dx, ny = y+dy;
+        if(nx<1 || ny<1 || nx>g[0].length-2 || ny>g.length-2) continue;
+        if(lab[ny][nx]>=0) s.add(lab[ny][nx]);
+      }
+      if(s.size >= 2) cands.push([x,y]);
+    }
+    if(!cands.length) return false;
+    const [cx,cy] = cands[Math.floor(rng()*cands.length)];
+    g[cy][cx] = 0;
+  }
+  return false;
+}
+
+/* ---- 结构建关 → 序列化为字符地图（失败返回 null，换种子重试） ---- */
+function buildRawLevel(P, rng, relax){
+  const W = P.cols, H = P.rows;
+  const g = Array.from({length:H}, () => new Array(W).fill(0));
+  for(let x=0;x<W;x++){ g[0][x]=1; g[H-1][x]=1; }
+  for(let y=0;y<H;y++){ g[y][0]=1; g[y][W-1]=1; }
+
+  // 1) 墙块（短条形，滚球手感比密网墙友好）
+  const blobN = Math.max(3, P.wallBlobs - relax*2);
+  for(let i=0;i<blobN;i++){
+    const horiz = rng() < 0.5;
+    const len = 2 + Math.floor(rng()*4);
+    const x0 = 1 + Math.floor(rng()*(W-2));
+    const y0 = 1 + Math.floor(rng()*(H-2));
+    for(let j=0;j<len;j++){
+      const x = horiz ? Math.min(W-2, x0+j) : x0;
+      const y = horiz ? y0 : Math.min(H-2, y0+j);
+      g[y][x] = 1;
+    }
+  }
+  // 2) 散点墙（密度随进度上升）
+  const sc = Math.max(0, P.scatter - relax*0.02);
+  for(let y=1;y<H-1;y++) for(let x=1;x<W-1;x++){
+    if(g[y][x]===0 && rng() < sc) g[y][x] = 1;
+  }
+  // 3) 开阔房间（躲洞 / 躲巡逻的喘息区）
+  const rooms = 2 + Math.floor(rng()*3);
+  for(let r=0;r<rooms;r++){
+    const rw = 3 + Math.floor(rng()*2), rh = 3;
+    const x0 = 1 + Math.floor(rng()*Math.max(1, W-rw-2));
+    const y0 = 1 + Math.floor(rng()*Math.max(1, H-rh-2));
+    for(let y=y0;y<y0+rh;y++) for(let x=x0;x<x0+rw;x++) g[y][x] = 0;
+  }
+  if(!ensureConnected(g, rng)) return null;
+
+  const floors = [];
+  for(let y=1;y<H-1;y++) for(let x=1;x<W-1;x++) if(g[y][x]===0) floors.push({x,y});
+  if(floors.length < 40) return null;
+
+  const key = (x,y) => y*W + x;
+  const isHole = (x,y) => holes.some(h => h.x===x && h.y===y);
+  const openN = c => (g[c.y][c.x-1]===0?1:0) + (g[c.y][c.x+1]===0?1:0) +
+                     (g[c.y-1][c.x]===0?1:0) + (g[c.y+1][c.x]===0?1:0);
+
+  // 4) 起点 + 终点（G 取 BFS 距离前 15% 的随机格）
+  const S = floors[Math.floor(rng()*floors.length)];
+  const dist = bfsGrid(g, S);
+  const reach = floors.filter(c => dist[c.y][c.x] >= 0);
+  if(reach.length < 40) return null;
+  const sorted = reach.slice().sort((a,b) => dist[b.y][b.x] - dist[a.y][a.x]);
+  const top = sorted.slice(0, Math.max(1, Math.floor(sorted.length*0.15)));
+  const Gc = top[Math.floor(rng()*top.length)];
+  const maxD = dist[Gc.y][Gc.x];
+  if(maxD < 12) return null;                            // 迷宫太小重造
+  const distG = bfsGrid(g, Gc);
+  const onSP = c => dist[c.y][c.x]>=0 && distG[c.y][c.x]>=0 &&
+                    dist[c.y][c.x] + distG[c.y][c.x] === maxD;
+
+  const used = new Set([key(S.x,S.y), key(Gc.x,Gc.y)]);
+  const take = c => used.add(key(c.x, c.y));
+
+  // 5) 星星：远离起点与终点（终点磁吸/过关触发都吃不到贴太近的星）、
+  //    互相分散、偏爱死胡同（开放邻 ≤ 2）
+  const stars = [];
+  const sCand = reach.filter(c => !used.has(key(c.x,c.y)) && dist[c.y][c.x] > maxD*0.25 &&
+                                  Math.abs(c.x-Gc.x) + Math.abs(c.y-Gc.y) > 3);
+  for(let t=0; t<300 && stars.length<3; t++){
+    const c = sCand[Math.floor(rng()*sCand.length)];
+    if(!c) break;
+    if(stars.some(s => Math.abs(s.x-c.x)+Math.abs(s.y-c.y) < 4)) continue;
+    stars.push(c); take(c);
+  }
+  if(stars.length < 3) return null;
+
+  // 6) 黑洞：不进窄走廊（≥3 开邻）、离出生点/终点远、互不贴身、不贴星星
+  const holes = [];
+  const holeN = Math.max(0, P.holes - relax);
+  const hCand = reach.filter(c =>
+    !used.has(key(c.x,c.y)) && dist[c.y][c.x] > 3 &&
+    Math.abs(c.x-Gc.x) + Math.abs(c.y-Gc.y) > 3 && openN(c) >= 3);
+  for(let t=0; t<300 && holes.length<holeN; t++){
+    const c = hCand[Math.floor(rng()*hCand.length)];
+    if(!c) break;
+    if(holes.some(h => Math.abs(h.x-c.x)+Math.abs(h.y-c.y) < 2)) continue;
+    if(stars.some(s => Math.abs(s.x-c.x)+Math.abs(s.y-c.y) < 2)) continue;
+    holes.push(c); take(c);
+  }
+
+  // 7) 冰面：随机种子扩散成片（不覆盖已占要素/洞）；洞的 4 邻不放冰——
+  //    洞永远被 ≥1 格干地包围（v0.7：防"冰拐角斜插"——球在冰上高速滑行
+  //    转向失灵时，贴路洞若无干地缓冲即成必死点，L48 曾 5 连死于此）
+  const iceSet = new Set();
+  const iceN = Math.max(0, P.iceSeeds - Math.floor(relax/2));
+  const iceCand = reach.filter(c => !used.has(key(c.x,c.y)) && dist[c.y][c.x] > 2);
+  const iceTarget = iceN * (2*P.iceR+1) * (2*P.iceR+1);
+  const holeAdj = (x,y) => isHole(x+1,y) || isHole(x-1,y) || isHole(x,y+1) || isHole(x,y-1);
+  for(let i=0; i<iceN*6 && iceSet.size < iceTarget; i++){
+    const c = iceCand[Math.floor(rng()*iceCand.length)];
+    if(!c) break;
+    for(let dy=-P.iceR; dy<=P.iceR; dy++) for(let dx=-P.iceR; dx<=P.iceR; dx++){
+      const x = c.x+dx, y = c.y+dy;
+      if(x<1 || y<1 || x>=W-1 || y>=H-1) continue;
+      if(g[y][x]!==0 || used.has(key(x,y)) || isHole(x,y) || holeAdj(x,y)) continue;
+      iceSet.add(key(x,y));
+    }
+  }
+
+  // 8) 检查点：S→G 最短路径中段（通关必经，死亡惩罚合理）；
+  //    允许落在冰面上（序列化时冰字符不覆盖 C → 冰海中的"干地锚点"）
+  const checks = [];
+  const midCand = reach.filter(c =>
+    onSP(c) && !used.has(key(c.x,c.y)) &&
+    dist[c.y][c.x] > maxD*0.3 && dist[c.y][c.x] < maxD*0.75);
+  for(let t=0; t<200 && checks.length<P.checks; t++){
+    const c = midCand[Math.floor(rng()*midCand.length)];
+    if(!c) break;
+    if(checks.some(k => Math.abs(k.x-c.x)+Math.abs(k.y-c.y) < 4)) continue;
+    checks.push(c); take(c);
+  }
+
+  // 9) 传送门：远距离配对（捷径/跨区），出入口留有开阔邻格
+  const portals = [];
+  const pCand = reach.filter(c =>
+    !used.has(key(c.x,c.y)) && !iceSet.has(key(c.x,c.y)) &&
+    openN(c) >= 2 && dist[c.y][c.x] > 3);
+  for(let pr=0; pr<P.portals; pr++){
+    for(let t=0; t<120; t++){
+      const a = pCand[Math.floor(rng()*pCand.length)];
+      const b = pCand[Math.floor(rng()*pCand.length)];
+      if(!a || !b) break;
+      if(Math.abs(a.x-b.x) + Math.abs(a.y-b.y) < Math.max(6, maxD*0.45)) continue;
+      if(used.has(key(a.x,a.y)) || used.has(key(b.x,b.y))) continue;
+      if(Math.abs(a.x-S.x)+Math.abs(a.y-S.y) < 3) continue;
+      if(Math.abs(b.x-Gc.x)+Math.abs(b.y-Gc.y) < 3) continue;
+      portals.push({a, b}); take(a); take(b);
+      break;
+    }
+  }
+
+  // 10) 弹射带：两侧为墙的走廊内，方向沿走廊（下一格须空且非洞）；
+  //     允许落在冰面上（序列化顺序在冰之后 → 带字符覆盖冰字符，
+  //     冰雪区不被冰面饿死弹射带配额）
+  const boosts = [];
+  const bCand = [];
+  for(const c of reach){
+    if(used.has(key(c.x,c.y)) || isHole(c.x,c.y)) continue;
+    const lw = g[c.y][c.x-1]===1, rw2 = g[c.y][c.x+1]===1;
+    const uw = g[c.y-1][c.x]===1, dw = g[c.y+1][c.x]===1;
+    if(lw && rw2 && !uw && !dw){                        // 纵向走廊
+      if(!uw && !isHole(c.x, c.y-1)) bCand.push({c, dir:[0,-1]});
+      if(!dw && !isHole(c.x, c.y+1)) bCand.push({c, dir:[0,1]});
+    } else if(uw && dw && !lw && !rw2){                 // 横向走廊
+      if(!lw && !isHole(c.x-1, c.y)) bCand.push({c, dir:[-1,0]});
+      if(!rw2 && !isHole(c.x+1, c.y)) bCand.push({c, dir:[1,0]});
+    }
+  }
+  for(let i=0; i<P.boosts*6 && boosts.length<P.boosts; i++){
+    const pick = bCand[Math.floor(rng()*bCand.length)];
+    if(!pick) break;
+    if(boosts.some(b => Math.abs(b.x-pick.c.x)+Math.abs(b.y-pick.c.y) < 3)) continue;
+    boosts.push({x:pick.c.x, y:pick.c.y, dx:pick.dir[0], dy:pick.dir[1]});
+  }
+
+  // 11) 定时闸门：S→G 最短路径上（保证必经的节奏挑战），两组反相
+  const gates = [];
+  const gCand = reach.filter(c =>
+    onSP(c) && !used.has(key(c.x,c.y)) && !iceSet.has(key(c.x,c.y)) &&
+    dist[c.y][c.x] > 3 && !holes.some(h => Math.abs(h.x-c.x)+Math.abs(h.y-c.y) < 2));
+  for(let t=0; t<250 && gates.length<P.gates; t++){
+    const c = gCand[Math.floor(rng()*gCand.length)];
+    if(!c) break;
+    if(boosts.some(b => b.x===c.x && b.y===c.y)) continue;
+    if(gates.some(gt => Math.abs(gt.x-c.x)+Math.abs(gt.y-c.y) < 3)) continue;
+    gates.push({x:c.x, y:c.y, grp:gates.length % 2});
+  }
+  // 随机尝试没放满 → 按路径距离顺序贪心补齐（闸门是区域主题，尽量放满配额）
+  if(gates.length < P.gates){
+    const rest = gCand.slice().sort((a,b) => dist[a.y][a.x] - dist[b.y][b.x]);
+    for(const c of rest){
+      if(gates.length >= P.gates) break;
+      if(boosts.some(b => b.x===c.x && b.y===c.y)) continue;
+      if(gates.some(gt => Math.abs(gt.x-c.x)+Math.abs(gt.y-c.y) < 3)) continue;
+      gates.push({x:c.x, y:c.y, grp:gates.length % 2});
+    }
+  }
+
+  // 11.5) 迷雾/崩塌为运行时关卡级标志（fog=视野半径、crumble=碎裂延迟秒数），
+  //       不改地图拓扑：迷雾只遮渲染层；崩塌板死亡全场复位，正向单程路径
+  //       必然存在（BFS 最短路不重复格子），静态校验无需建模
+
+  // 12) 序列化（提前：封路检测需要字符地图；巡逻块只存 hazards 数组不进地图）
+  const ch = g.map(row => row.map(v => v ? '#' : '.'));
+  ch[S.y][S.x] = 'S';
+  ch[Gc.y][Gc.x] = 'G';
+  stars.forEach(s => ch[s.y][s.x] = '*');
+  holes.forEach(h => ch[h.y][h.x] = 'O');
+  checks.forEach(c => ch[c.y][c.x] = 'C');
+  iceSet.forEach(k => {
+    const x = k % W, y = (k - x) / W;
+    if(ch[y][x] === '.') ch[y][x] = 'I';
+  });
+  portals.forEach((pr, i) => {
+    const c = String(i+1);
+    ch[pr.a.y][pr.a.x] = c;
+    ch[pr.b.y][pr.b.x] = c;
+  });
+  boosts.forEach(b => {
+    ch[b.y][b.x] = b.dx===1 ? '>' : b.dx===-1 ? '<' : (b.dy===-1 ? '^' : 'v');
+  });
+  gates.forEach(gt => { ch[gt.y][gt.x] = gt.grp===0 ? 'T' : 't'; });
+  const mapRows = ch.map(r => r.join(''));
+
+  // 12.5) 弹射带方向修复：必达路径上的逆行带 → 翻转带向（双向需求则拆除）
+  //      逆带物理不可行（BOOST 18 > ACC 17，低速球必被推回），不修复即死路
+  if(!fixBoostDirs(mapRows, S, [Gc].concat(stars, checks))) return null;
+
+  // 13) 巡逻块：横长直廊（避开洞/星/检查点/弹射带/闸门与出生终点行）
+  //     放置前跑封路检测 hazardSealsLevel：无完全穿越入口的条带会封死横向
+  //     通路（球穿不过块身）。随机范围不合格 → 兜底改用入口列居中的小范围
+  //     （块能停在入口列两侧 → 必有完全入口，球可攀格躲块再冲出条带），
+  //     仍不合格则放弃该行（巡逻块是节奏要素，不可封死唯一通路）
+  const hazards = [];
+  const gateCells = new Set(gates.map(gt => key(gt.x, gt.y)));
+  const boostCells = new Set(boosts.map(b => key(b.x, b.y)));
+  const hzRuns = [];
+  for(let y=1; y<H-1; y++){
+    let x = 1;
+    while(x < W-1){
+      const plain = g[y][x]===0 && !used.has(key(x,y)) && !gateCells.has(key(x,y)) &&
+                    !boostCells.has(key(x,y)) && !isHole(x,y);
+      if(!plain){ x++; continue; }
+      let x2 = x;
+      while(x2+1 < W-1 && g[y][x2+1]===0 && !used.has(key(x2+1,y)) &&
+            !gateCells.has(key(x2+1,y)) && !boostCells.has(key(x2+1,y)) &&
+            !isHole(x2+1, y)) x2++;
+      if(x2 - x + 1 >= 5) hzRuns.push({y, x0:x, x1:x2});
+      x = x2 + 1;
+    }
+  }
+  const usedRows = new Set();
+  for(let i=0; i<P.hazards*10 && hazards.length<P.hazards; i++){
+    const run = hzRuns[Math.floor(rng()*hzRuns.length)];
+    if(!run || usedRows.has(run.y) || run.y===S.y || run.y===Gc.y) continue;
+    const lo = run.x0 + 0.8, hi = run.x1 - 1.8;         // 两端留安全袋
+    if(hi - lo < 1.2) continue;
+    const x0 = lo + rng()*(hi-lo-1);
+    const x1 = x0 + 1 + rng()*Math.max(0.2, hi - x0 - 1);
+    let T = P.hzT*(0.9+rng()*0.25);
+    T = Math.max(T, (x1-x0)*2/4);                       // 块速≤4 < 球 VMAX 5.4（躲块后追得上）
+    const ph = rng();
+    const cand = { r:run.y, x0:+x0.toFixed(1), x1:+x1.toFixed(1),
+                   T:+T.toFixed(2), ph:+ph.toFixed(3) };
+    if(!hazardSealsLevel(mapRows, hazards.concat([cand]), S, Gc, stars, checks)){
+      usedRows.add(run.y);
+      hazards.push(cand);
+      continue;
+    }
+    // 兜底：入口列居中的小巡逻范围（范围两端留出块身位 → 该列必为完全穿越入口）
+    let fixed = null;
+    for(let c=run.x0; c<=run.x1 && !fixed; c++){
+      const up = run.y>0   && isEntryCell(mapRows[run.y-1][c]);
+      const dn = run.y<H-1 && isEntryCell(mapRows[run.y+1][c]);
+      if(!up && !dn) continue;
+      const fx0 = Math.max(lo, c-1.4), fx1 = Math.min(hi, c+1.4);
+      if(fx1 - fx0 < 1.2 || fx0 > c-0.6 || fx1 < c+0.6) continue;
+      fixed = { r:run.y, x0:+fx0.toFixed(1), x1:+fx1.toFixed(1), T:cand.T, ph:cand.ph };
+    }
+    if(fixed && !hazardSealsLevel(mapRows, hazards.concat([fixed]), S, Gc, stars, checks)){
+      usedRows.add(run.y);
+      hazards.push(fixed);
+    }
+  }
+
+  return {
+    name: TIERS[P.tier-1].theme + ' ' + P.k,
+    hint: TIERS[P.tier-1].hint,
+    map: mapRows,
+    hazards,
+    fog: P.fog,
+    crumble: P.crumble
+  };
+}
+/* 生成器结束处：迷雾视野与碎裂延迟为关卡级附加数据（同 hazards，不进字符地图） */
+
+/* ---- 巡逻封路检测（生成器放置规则 + 校验器共用）----
+ * 物理事实：1 格高走廊里的巡逻块（宽 1.0、高 0.7、三角波往返）球无法从
+ * 块身上穿过去——碰撞即被推出并弹飞，球最多跟在块后走，永远到不了另一侧
+ * （v0.6.1 修复：L25 曾因此成死路，BFS 视巡逻块为可通行导致漏判）。
+ * 只有当巡逻条带 [x0-1.1, x1+1.1] 内存在"完全穿越入口"——某列
+ * c∈[x0+0.6, x1-0.6] 上下格开放，块能停在 c 的两侧，球可攀上入口格躲块、
+ * 再朝块离开的方向冲出条带——该条带才可双向通行。
+ * 无入口 → 条带内横向边封死，用改造 BFS 复查 S→G/星/检查点可达性。 */
+function isEntryCell(c){
+  return c==='.' || c==='I' || c==='*' || c==='C' || c==='S' || c==='G';
+}
+function hazardSealedEdges(rows, hazards){
+  const gh = rows.length, gw = rows[0].length;
+  const blocked = new Set();          // 'h:x,y'=边(x,y)-(x+1,y)；'v:x,y'=边(x,y)-(x,y+1)
+  for(const h of hazards){
+    const row = rows[h.r]; if(!row) continue;
+    const xLo = Math.max(1, Math.ceil(h.x0 - 1.1));
+    const xHi = Math.min(gw-2, Math.floor(h.x1 + 1.1));
+    const strip = [];
+    for(let x=xLo; x<=xHi; x++) if(row[x] !== '#' && row[x] !== 'O') strip.push(x);
+    if(strip.length < 2) continue;
+    let full = false;                 // 完全穿越入口
+    for(const c of strip){
+      if(c < h.x0 + 0.6 || c > h.x1 - 0.6) continue;
+      if((h.r > 0    && isEntryCell(rows[h.r-1][c])) ||
+         (h.r < gh-1 && isEntryCell(rows[h.r+1][c]))){ full = true; break; }
+    }
+    if(full) continue;                // 条带可穿越，正常通行
+    for(const x of strip){
+      if(strip.includes(x+1)) blocked.add('h:' + x + ',' + h.r);
+      if(x > h.x1 - 0.6 && x < h.x0 + 0.6){   // 极短范围连竖井也封死（防御性）
+        if(h.r > 0)    blocked.add('v:' + x + ',' + (h.r-1));
+        if(h.r < gh-1) blocked.add('v:' + x + ',' + h.r);
+      }
+    }
+  }
+  return blocked;
+}
+function hazardSealsLevel(rows, hazards, start, goal, stars, checks){
+  const gh = rows.length, gw = rows[0].length;
+  const blocked = hazardSealedEdges(rows, hazards);
+  const seen = new Set([start.x + ',' + start.y]);
+  const q = [start];
+  while(q.length){
+    const {x, y} = q.shift();
+    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx = x+dx, ny = y+dy, k = nx + ',' + ny;
+      if(nx<1 || ny<1 || nx>gw-2 || ny>gh-2) continue;
+      if(dx=== 1 && blocked.has('h:'+x+','+y)) continue;
+      if(dx===-1 && blocked.has('h:'+(x-1)+','+y)) continue;
+      if(dy=== 1 && blocked.has('v:'+x+','+y)) continue;
+      if(dy===-1 && blocked.has('v:'+x+','+(y-1))) continue;
+      const c = rows[ny][nx];
+      if(c==='#' || c==='O') continue;
+      const bd = boostDirAt(rows, ny, nx);
+      if(bd && (bd[0]!==dx || bd[1]!==dy)) continue;   // 逆带不可入（同 verify 规则）
+      if(!seen.has(k)){ seen.add(k); q.push({x:nx, y:ny}); }
+    }
+  }
+  const ok = p => seen.has(p.x + ',' + p.y);
+  if(!ok(goal)) return true;
+  for(const s of stars)  if(!ok(s)) return true;
+  for(const c of checks) if(!ok(c)) return true;
+  return false;
+}
+
+/* ---- 弹射带方向规则（v0.6.1 修复，生成器修复 + 校验器共用）----
+ * 物理事实：带上加速度 BOOST=18 > 玩家最大重力 ACC=17（v0.8 灵敏度调整，
+ * 14.5→17 同步 15→18 保持裕度），静止/低速的球逆带必被推回（净加速度 1.0
+ * 指向带向，再加阻尼），只有 ≥4 格/s 冲入带格才
+ * 可能靠惯性穿过 1 格带长——对体感休闲玩法等于不可逆行。L43 曾因此成死路：
+ * G 所在区块唯一入口竖井上有条朝南 'v' 带，BFS 视带为普通格导致漏判
+ * （同类问题旧版共 7 关：32/33/37/38/39/40/43）。
+ * 保守模型：带格仅允许沿带方向进入（顺带=被助推 ✓，逆带=封禁）。
+ * 修复管线（buildRawLevel 第 12.5 步）：对每个必达目标（G/星/检查点）取
+ * 普通 BFS 路径，把路径上逆行的带翻转为沿路径进入方向——生成器只把带放进
+ * 两端开放的走廊，翻转后带向仍沿走廊，结构安全；同一条带被两条目标路径
+ * 要求反向穿越时改为拆除（'.'，双向需求无法用单向带满足）。 */
+function boostDirAt(rows, y, x){
+  const c = rows[y][x];
+  return c==='^' ? [0,-1] : c==='v' ? [0,1] : c==='<' ? [-1,0] : c==='>' ? [1,0] : null;
+}
+/* 方向性 BFS 可达集（修复轮询用；不含巡逻封边——修复先于巡逻块放置） */
+function boostDirReachSet(rows, start){
+  const gh = rows.length, gw = rows[0].length;
+  const seen = new Set([start.x+','+start.y]);
+  const q = [start];
+  while(q.length){
+    const {x, y} = q.shift();
+    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx = x+dx, ny = y+dy, k = nx+','+ny;
+      if(nx<1 || ny<1 || nx>gw-2 || ny>gh-2) continue;
+      const c = rows[ny][nx];
+      if(c==='#' || c==='O') continue;
+      const bd = boostDirAt(rows, ny, nx);
+      if(bd && (bd[0]!==dx || bd[1]!==dy)) continue;   // 逆带不可入
+      if(!seen.has(k)){ seen.add(k); q.push({x:nx, y:ny}); }
+    }
+  }
+  return seen;
+}
+/* 修复必达路径上的逆行带：翻转（双向需求则拆除）。成功=true；不可修复=false */
+function fixBoostDirs(rows, S, targets){
+  const gw = rows[0].length;
+  const dirChar = (dx,dy) => dx===1 ? '>' : dx===-1 ? '<' : dy===-1 ? '^' : 'v';
+  const done = new Map();                              // 'x,y' -> 'flip' | 'del'
+  for(let round=0; round<8; round++){
+    const reach = boostDirReachSet(rows, S);
+    const miss = targets.find(t => !reach.has(t.x+','+t.y));
+    if(!miss) return true;
+    /* 普通 BFS 找 S→miss 路径（带视作普通格） */
+    const prev = new Map();
+    const seen = new Set([S.x+','+S.y]);
+    const q = [S];
+    let found = false;
+    while(q.length && !found){
+      const {x, y} = q.shift();
+      for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+        const nx = x+dx, ny = y+dy, k = nx+','+ny;
+        if(nx<1 || ny<1 || nx>gw-2 || ny>=rows.length-1) continue;
+        const c = rows[ny][nx];
+        if(c==='#' || c==='O' || seen.has(k)) continue;
+        seen.add(k); prev.set(k, {x, y});
+        if(nx===miss.x && ny===miss.y){ found = true; break; }
+        q.push({x:nx, y:ny});
+      }
+    }
+    if(!found) return false;                           // 普通路径都不通 → 外层换种子
+    let acted = false;
+    let cur = {x:miss.x, y:miss.y};
+    while(!(cur.x===S.x && cur.y===S.y)){
+      const p = prev.get(cur.x+','+cur.y);
+      const bd = boostDirAt(rows, cur.y, cur.x);
+      if(bd){
+        const ex = cur.x - p.x, ey = cur.y - p.y;      // 进入该带的方向
+        if(bd[0]!==ex || bd[1]!==ey){
+          const k = cur.x+','+cur.y;
+          const how = done.get(k);
+          if(how === 'flip'){                          // 已为他人翻转 → 双向需求 → 拆除
+            rows[cur.y] = rows[cur.y].substring(0,cur.x) + '.' + rows[cur.y].substring(cur.x+1);
+            done.set(k, 'del');
+          } else if(!how){
+            rows[cur.y] = rows[cur.y].substring(0,cur.x) + dirChar(ex, ey) + rows[cur.y].substring(cur.x+1);
+            done.set(k, 'flip');
+          }
+          acted = true;
+        }
+      }
+      cur = p;
+    }
+    if(!acted) return false;                           // 路径全顺带却不可达（防御性）
+  }
+  return false;
+}
+
+/* ---- 校验（生成器自检 + CLI 工具共用）：结构规则 + BFS 可达性 ---- */
+function verifyLevelData(raw){
+  const errs = [];
+  const rows = raw.map, gh = rows.length, gw = rows[0].length;
+  const VALID = new Set(['#','.','S','G','*','O','I','C','1','2','3','4','^','v','<','>','T','t']);
+  rows.forEach((r, y) => {
+    if(r.length !== gw) errs.push('第'+y+'行宽度 '+r.length+'≠'+gw);
+    for(const c of r) if(!VALID.has(c)) errs.push('第'+y+'行非法字符 "'+c+'"');
+  });
+  if(errs.length) return { ok:false, errs };
+  const cells = rows.join('');
+  if((cells.match(/S/g)||[]).length !== 1) errs.push('S 数量≠1');
+  if((cells.match(/G/g)||[]).length !== 1) errs.push('G 数量≠1');
+  for(const d of ['1','2','3','4']){
+    const n = (cells.match(new RegExp(d, 'g'))||[]).length;
+    if(n !== 0 && n !== 2) errs.push('传送门 "'+d+'" 数量 '+n+' ≠ 2');
+  }
+  let start = null;
+  const stars = [], checks = [];
+  for(let y=0;y<gh;y++) for(let x=0;x<gw;x++){
+    const c = rows[y][x];
+    if(c==='S') start = {x,y};
+    else if(c==='*') stars.push({x,y});
+    else if(c==='C') checks.push({x,y});
+  }
+  if(!start){ errs.push('无起点'); return { ok:false, errs }; }
+  // BFS：墙/洞堵死；闸门视作开（周期可通行）；传送门当普通地板（捷径非必需）
+  //      巡逻封路：无完全穿越入口的巡逻条带，其内横向边封死（见 hazardSealedEdges）
+  //      弹射方向：带格仅沿带向可入（逆带物理不可行——BOOST 18 > 最大重力 17，
+  //      低速球必被推回；v0.6.1 修复 L32/33/37/38/39/40/43 同类死路）
+  //      星序规则：第二遍 BFS 把终点格当墙——只能"穿过 G"才拿得到的星星物理上
+  //      永远吃不到（球到 G 即过关；v0.7 修复 L38 左下角星星）
+  const sealed = hazardSealedEdges(rows, raw.hazards||[]);
+  function bfs(blockGoal){
+    const seen = new Set([start.x+','+start.y]);
+    const q = [start];
+    while(q.length){
+      const {x, y} = q.shift();
+      for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+        const nx=x+dx, ny=y+dy, k = nx+','+ny;
+        if(nx<0 || ny<0 || nx>=gw || ny>=gh) continue;
+        if(dx=== 1 && sealed.has('h:'+x+','+y)) continue;
+        if(dx===-1 && sealed.has('h:'+(x-1)+','+y)) continue;
+        if(dy=== 1 && sealed.has('v:'+x+','+y)) continue;
+        if(dy===-1 && sealed.has('v:'+x+','+(y-1))) continue;
+        const c = rows[ny][nx];
+        if(c==='#' || c==='O') continue;
+        if(blockGoal && c==='G') continue;             // 终点格视为墙
+        const bd = boostDirAt(rows, ny, nx);
+        if(bd && (bd[0]!==dx || bd[1]!==dy)) continue; // 逆带不可入
+        if(!seen.has(k)){ seen.add(k); q.push({x:nx, y:ny}); }
+      }
+    }
+    return p => seen.has(p.x+','+p.y);
+  }
+  const reachable = bfs(false);
+  const reachNoGoal = bfs(true);
+  let goal = null;
+  for(let y=0;y<gh;y++){ const x = rows[y].indexOf('G'); if(x>=0) goal = {x,y}; }
+  // 反向可达：从 G 沿"入格规则"的逆向边扩散，得到「物理上能走到 G」的格集合。
+  // 星星若不在集合内 = 吃星后被单向弹射带困死（BOOST 18 > 最大重力 17，
+  // 带口逆行物理不可行；v0.7 星序规则第二环）
+  const canEscape = (() => {
+    if(!goal) return p => false;
+    const seen = new Set([goal.x+','+goal.y]);
+    const q = [goal];
+    while(q.length){
+      const {x, y} = q.shift();
+      for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+        const nx=x+dx, ny=y+dy, k = nx+','+ny;   // u=候选起点，目的地是 v=(x,y)
+        if(nx<0 || ny<0 || nx>=gw || ny>=gh) continue;
+        if(seen.has(k)) continue;
+        if(dx=== 1 && sealed.has('h:'+x+','+y)) continue;
+        if(dx===-1 && sealed.has('h:'+(x-1)+','+y)) continue;
+        if(dy=== 1 && sealed.has('v:'+x+','+y)) continue;
+        if(dy===-1 && sealed.has('v:'+x+','+(y-1))) continue;
+        const c = rows[ny][nx];
+        if(c==='#' || c==='O') continue;
+        const bd = boostDirAt(rows, y, x);        // 进入目的地 v 的带向约束
+        if(bd && (bd[0]!==-dx || bd[1]!==-dy)) continue;
+        seen.add(k); q.push({x:nx, y:ny});
+      }
+    }
+    return p => seen.has(p.x+','+p.y);
+  })();
+  if(goal && !reachable(goal)) errs.push('终点不可达');
+  stars.forEach(s => {
+    if(!reachable(s)) errs.push('星星('+s.x+','+s.y+')不可达');
+    else if(!reachNoGoal(s)) errs.push('星星('+s.x+','+s.y+')在终点之后（过关先于拾取）');
+    else if(!canEscape(s)) errs.push('星星('+s.x+','+s.y+')吃后无法脱身（单向弹射带困死）');
+  });
+  checks.forEach(c => { if(!reachable(c)) errs.push('检查点('+c.x+','+c.y+')不可达'); });
+  (raw.hazards||[]).forEach(h => {
+    const row = rows[h.r];
+    if(!row || row[Math.floor(h.x0)]==='#' || row[Math.floor(h.x1+0.99)]==='#')
+      errs.push('巡逻块 r='+h.r+' 范围压墙');
+  });
+  // 迷雾/崩塌：运行时关卡级标志，只做参数合法性检查（范围/符号）。
+  //   崩塌板死亡全场复位 → 单程通过性由普通 BFS 保证（最短路不重复格），
+  //   S/G/C/* 及弹射带/传送门格在运行时永不碎（initCrumble 排除）
+  if(raw.fog !== undefined && (raw.fog < 0 || raw.fog > 8))
+    errs.push('迷雾视野半径超界 ' + raw.fog);
+  if(raw.crumble !== undefined && (raw.crumble < 0 || raw.crumble > 3))
+    errs.push('碎裂延迟超界 ' + raw.crumble);
+  return { ok: errs.length===0, errs };
+}
+
+/* ---- 生成入口：失败换种子重试（附带放宽参数），保底兜底图 ---- */
+/* v0.8 修复：L48 行 2 走廊巡逻带几何死局。
+ * 数学结论：块带 x∈[6.8,10.2]、块速 1.8、周期 2.67s，行 2 是东西唯一通路；
+ * 球从西口恒在实体块西侧（无法超越），碰撞法向恒朝西 → 弹飞恒朝西，
+ * 新旧物理下任何策略（含人类玩家）都无法从西向东穿越（旧物理实测 118 次弹飞超时）。
+ * 修复：行 3 的 x6/x8 开墙，形成绕行路线 (5,3闸门)→(6,3)(7,3)(8,3)→(9,3闸门)→(10,3)，
+ * 完全避开块带；绕行仍需过 2 个 grp0 同相闸门（1.4s 节奏），时机挑战保留。 */
+function patchL48CorridorBypass(raw){
+  const r3 = raw.map[3];
+  raw.map[3] = r3.slice(0,6) + '.' + r3[7] + '.' + r3.slice(9);
+}
+
+function generateLevel(n){
+  const P = levelParams(n);
+  for(let att=0; att<80; att++){
+    const relax = Math.floor(att/25);
+    const rng = mulberry32(levelSeed(n, att));
+    const raw = buildRawLevel(P, rng, relax);
+    if(raw && verifyLevelData(raw).ok){
+      if(n === 48) patchL48CorridorBypass(raw);   // 绕行口补丁（CLI verify 会全量复验）
+      return raw;
+    }
+  }
+  return {
+    name: TIERS[P.tier-1].theme + ' ' + P.k,
+    hint: TIERS[P.tier-1].hint,
+    map: [
+      '###########',
+      '#S........#',
+      '#.........#',
+      '#..O...O..#',
+      '#.........#',
+      '#....*....#',
+      '#.........#',
+      '#..O...O..#',
+      '#.........#',
+      '#....*....#',
+      '#.........#',
+      '#..O...O..#',
+      '#.........#',
+      '#*.......G#',
+      '###########'
+    ],
+    hazards:[],
+    fog:P.fog,
+    crumble:P.crumble
+  };
+}
+/*LEVELSYS-END*/
+
+/* ---------- 关卡解析 ---------- */
+const BOOST_DIRS = { '^':[0,-1], 'v':[0,1], '<':[-1,0], '>':[1,0] };
+const PORTAL_COLORS = ['#8f7bff', '#4fd7ff', '#ff7bd5', '#ffd54a'];
+
+function parseLevel(L){
+  const rows = L.map, gh = rows.length, gw = rows[0].length;
+  const grid = [], stars = [], holes = [], checks = [], ice = new Set();
+  const portals = [], boosts = [], gates = [], gateMap = new Map();
+  const pDigits = {};
+  let start = null, goal = null;
+  for(let y=0; y<gh; y++){
+    const arr = [];
+    for(let x=0; x<gw; x++){
+      const c = rows[y][x];
+      arr.push(c==='#' ? 1 : 0);
+      if(c==='S') start = {x:x+0.5, y:y+0.5};
+      else if(c==='G') goal = {x:x+0.5, y:y+0.5};
+      else if(c==='*') stars.push({x:x+0.5, y:y+0.5, got:false});
+      else if(c==='O') holes.push({x:x+0.5, y:y+0.5});
+      else if(c==='C') checks.push({x:x+0.5, y:y+0.5, active:false});
+      else if(c==='I') ice.add(x+','+y);
+      else if(c>='1' && c<='4'){
+        (pDigits[c] = pDigits[c] || []).push({x:x+0.5, y:y+0.5});
+      }
+      else if(BOOST_DIRS[c]){
+        const d = BOOST_DIRS[c];
+        boosts.push({x:x+0.5, y:y+0.5, dx:d[0], dy:d[1], cool:0});
+      }
+      else if(c==='T' || c==='t'){
+        const gt = { x, y, grp: c==='T' ? 0 : 1 };
+        gates.push(gt); gateMap.set(x+','+y, gt);
+      }
+    }
+    grid.push(arr);
+  }
+  for(const d in pDigits){
+    if(pDigits[d].length === 2)
+      portals.push({ a:pDigits[d][0], b:pDigits[d][1], col: PORTAL_COLORS[+d-1] || '#8f7bff' });
+  }
+  const hazards = (L.hazards||[]).map(h => ({
+    row:h.r, x0:h.x0, x1:h.x1, T:h.T, ph:h.ph,
+    w:1, h:0.7, y:h.r+0.15, x:h.x0, vx:0, cool:0
+  }));
+  return { gw, gh, grid, stars, holes, checks, ice, start, goal, hazards,
+           fog:L.fog || 0, crumble:L.crumble || 0,
+           portals, boosts, gates, gateMap,
+           name:L.name, hint:L.hint };
+}
+
+/* ---------- 旋转输入：键盘、按住按钮、绕中心拖动 ---------- */
+const Input = {
+  keys:{}, pointers:new Map(), drag:null, pending:0,
+  reset(){
+    this.keys = {}; this.pointers.clear(); this.drag = null; this.pending = 0;
+    document.querySelectorAll('#rotation-controls button').forEach(b=>b.classList.remove('held'));
+  },
+  update(dt){
+    if(G.state !== 'playing'){ this.reset(); return; }
+    const left = this.keys.ArrowLeft || this.keys.KeyA || [...this.pointers.values()].includes(-1);
+    const right = this.keys.ArrowRight || this.keys.KeyD || [...this.pointers.values()].includes(1);
+    const speed = (this.keys.ShiftLeft || this.keys.ShiftRight) ? Math.PI/6 : Math.PI*2/3;
+    const delta = clamp(this.pending, -speed*dt, speed*dt);
+    this.pending -= delta;
+    G.angle = (G.angle + ((right?1:0)-(left?1:0))*speed*dt + delta) % TAU;
+  }
+};
+function pauseGame(){
+  if(G.state==='playing'){
+    Input.reset(); G.state='paused'; show($('screen-pause'),true);
+  }
+}
+window.addEventListener('keydown', e=>{
+  if(['ArrowLeft','ArrowRight','Space','KeyA','KeyD'].includes(e.code)) e.preventDefault();
+  if(e.code==='Space' && !e.repeat){
+    if(G.state==='paused'){ show($('screen-pause'),false); G.state='playing'; }
+    else pauseGame();
+    return;
+  }
+  if(G.state==='playing') Input.keys[e.code] = true;
+});
+window.addEventListener('keyup', e=>{ delete Input.keys[e.code]; });
+for(const [id, direction] of [['rotate-left',-1],['rotate-right',1]]){
+  const button = $(id);
+  button.addEventListener('pointerdown', e=>{
+    if(G.state!=='playing' || (e.pointerType==='mouse' && e.button!==0)) return;
+    e.preventDefault(); button.setPointerCapture(e.pointerId);
+    Input.pointers.set(e.pointerId,direction); button.classList.add('held');
+  });
+  button.addEventListener('lostpointercapture', endRotation);
+}
+function pointerAngle(e){
+  const cx=ox+G.L.gw*cell/2, cy=oy+G.L.gh*cell/2;
+  return Math.hypot(e.clientX-cx,e.clientY-cy)<24 ? null : Math.atan2(e.clientY-cy,e.clientX-cx);
+}
+cv.addEventListener('pointerdown', e=>{
+  if(G.state!=='playing' || Input.drag || (e.pointerType==='mouse' && e.button!==0)) return;
+  cv.setPointerCapture(e.pointerId);
+  Input.drag={id:e.pointerId,angle:pointerAngle(e)};
+});
+cv.addEventListener('pointermove', e=>{
+  const d=Input.drag;
+  if(!d || d.id!==e.pointerId || G.state!=='playing') return;
+  const a=pointerAngle(e);
+  if(a!==null && d.angle!==null){
+    const delta=Math.atan2(Math.sin(a-d.angle),Math.cos(a-d.angle));
+    Input.pending=clamp(Input.pending+delta,-Math.PI/3,Math.PI/3);
+  }
+  d.angle=a;
+});
+function endRotation(e){
+  Input.pointers.delete(e.pointerId);
+  if(Input.drag && Input.drag.id===e.pointerId){ Input.drag=null; Input.pending=0; }
+  $('rotate-left').classList.toggle('held',[...Input.pointers.values()].includes(-1));
+  $('rotate-right').classList.toggle('held',[...Input.pointers.values()].includes(1));
+}
+window.addEventListener('pointerup',endRotation);
+window.addEventListener('pointercancel',endRotation);
+cv.addEventListener('lostpointercapture',endRotation);
+window.addEventListener('blur',()=>{ Input.reset(); pauseGame(); });
+window.addEventListener('contextmenu',e=>e.preventDefault());
+
+/* ---------- 游戏状态 ---------- */
+const G = {
+  state:'menu',                 // menu|intro|playing|falling|win|clear|end|paused
+  levelN:1, L:null, angle:0,
+  ball:{ x:0, y:0, vx:0, vy:0, r:0.30, spawnT:0 },
+  time:0, deaths:0, starsGot:0,
+  checkpoint:null,
+  fall:{ t:0, hx:0, hy:0 },
+  winT:0, introT:0, portalCd:0,
+  fogFlash:0,                    // 迷雾闪现剩余秒数（>0 时视野扩到全图渐收回）
+  cr:null,                       // 崩塌板状态矩阵（非崩塌关 = null）
+  totals:{ time:0, deaths:0, stars:0 }
+};
+let cell = 20, ox = 0, oy = 0;   // 网格→屏幕 变换
+
+function layout(){
+  if(!G.L) return;
+  const styles=getComputedStyle(document.documentElement);
+  const top=100+(parseFloat(styles.getPropertyValue('--st'))||0);
+  const bot=104+(parseFloat(styles.getPropertyValue('--sb'))||0);
+  // 固定使用对角线尺寸，任意角度均不裁切，也不会在旋转时缩放跳动。
+  const diameter=Math.max(1,Math.min(W-24,H-top-bot));
+  cell=diameter/Math.hypot(G.L.gw,G.L.gh);
+  ox=(W-cell*G.L.gw)/2;
+  oy=top+(H-top-bot-cell*G.L.gh)/2;
+}
+
+/* ---------- UI 辅助 ---------- */
+let toastTimer = null;
+function toast(msg, dur){
+  const el = $('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>el.classList.remove('show'), (dur||2.2)*1000);
+}
+function show(el, on){ el.classList.toggle('hidden', !on); }
+function fmtTime(t){
+  const m = Math.floor(t/60), s = t - m*60;
+  return m + ':' + (s<10?'0':'') + s.toFixed(1);
+}
+function updateHudStars(){
+  const spans = $('hud-stars').children;
+  for(let i=0;i<spans.length;i++) spans[i].classList.toggle('got', i < G.starsGot);
+}
+
+/* ---------- 存档（本关最佳 / 解锁进度，含旧版迁移） ---------- */
+function loadBest(n){
+  try{ const v = JSON.parse(localStorage.getItem('rotate_maze_best_'+n)); if(v && typeof v.t==='number') return v; }catch(e){}
+  return null;
+}
+function saveBest(n, t, s){
+  const old = loadBest(n);
+  const better = !old || s > old.s || (s === old.s && t < old.t);
+  if(better) localStorage.setItem('rotate_maze_best_'+n, JSON.stringify({t, s}));
+  return better;
+}
+function getUnlock(){
+  return TOTAL_LEVELS; // 默认开放全部关卡，不受旧解锁进度限制。
+}
+
+
+/* ---------- 关卡装载（手工锚点 + 生成器 + 缓存） ---------- */
+const LEVEL_CACHE = {};
+function getLevel(n){
+  if(LEVEL_CACHE[n]) return LEVEL_CACHE[n];
+  const hand = HAND_LEVELS.find(h => h.slot === n);
+  const raw = hand || generateLevel(n);
+  const lv = parseLevel(raw);
+  lv.n = n;
+  lv.theme = TIERS[Math.min(9, Math.ceil(n/5)-1)].theme;
+  LEVEL_CACHE[n] = lv;
+  return lv;
+}
+
+/* ---------- 流程 ---------- */
+function startGame(){
+  G.totals = { time:0, deaths:0, stars:0 };
+  openLevelSelect();
+}
+
+/* 选关界面 */
+function openLevelSelect(){
+  buildLevelGrid();
+  show($('screen-start'), false);
+  show($('hud'), false);
+  hideAllOverlays();
+  show($('screen-levels'), true);
+  $('banner').classList.remove('show');
+  G.state = 'menu';
+}
+function buildLevelGrid(){
+  const unlock = getUnlock();
+  let html = '';
+  for(let t=0; t<10; t++){
+    html += '<div class="lv-theme">' + TIERS[t].theme + ' · ' + (t*5+1) + '-' + (t*5+5) + '</div>';
+    for(let k=1; k<=5; k++){
+      const n = t*5 + k;
+      const best = loadBest(n);
+      const cls = best ? 'done' : (n===unlock ? 'cur' : (n>unlock ? 'lock' : ''));
+      let st = '';
+      if(best) st = '<span class="st">' +
+        '★'.repeat(best.s) + '·'.repeat(3-best.s) + '</span>';
+      html += '<button class="lv-btn ' + cls + '" data-n="' + n + '"' +
+              (n>unlock ? ' disabled' : '') + '><span>' + n + '</span>' + st + '</button>';
+    }
+  }
+  $('lv-grid').innerHTML = html;
+  let stars = 0, done = 0;
+  for(let n=1; n<=TOTAL_LEVELS; n++){ const b = loadBest(n); if(b){ done++; stars += b.s; } }
+  $('lv-progress').textContent = '进度 ' + done + '/' + TOTAL_LEVELS +
+    ' · ★ ' + stars + '/' + (TOTAL_LEVELS*3);
+}
+$('lv-grid').addEventListener('click', e=>{
+  const btn = e.target.closest('.lv-btn');
+  if(!btn || btn.classList.contains('lock')) return;
+  AU.click();
+  gotoLevel(+btn.dataset.n);
+});
+
+function gotoLevel(n){
+  n = clamp(n, 1, TOTAL_LEVELS);
+  Input.reset(); G.angle=0;
+  G.levelN = n;
+  G.L = getLevel(n);
+  const b = G.ball;
+  b.x = G.L.start.x; b.y = G.L.start.y; b.vx = 0; b.vy = 0; b.spawnT = 0.4;
+  G.checkpoint = { x:G.L.start.x, y:G.L.start.y };
+  G.time = 0; G.deaths = 0; G.starsGot = 0; G.portalCd = 0;
+  G.L.stars.forEach(s=>s.got=false);
+  G.L.checks.forEach(c=>c.active=false);
+  G.fogFlash = G.L.fog ? PHYS.FOG_FLASH : 0;   // 迷雾关：开局闪现全图 2.4s（记忆预览）
+  G.cr = initCrumble(G.L);                     // 崩塌板全场复位
+  layout();
+  // HUD
+  $('hud-level').textContent = n + '/50 · ' + G.L.theme;
+  updateHudStars();
+  $('hud-timer').textContent = '0:00.0';
+  // 横幅 + 状态
+  $('banner-name').textContent = '第 ' + n + ' 关 · ' + G.L.name;
+  $('banner-hint').textContent = G.L.hint;
+  $('banner').classList.add('show');
+  G.introT = 1.5;
+  G.state = 'intro';
+  show($('screen-levels'), false);
+  show($('screen-clear'), false); show($('screen-end'), false);
+  show($('hud'), true);
+  hideAllOverlays();
+}
+
+function hideAllOverlays(){
+  show($('screen-clear'), false);
+  show($('screen-end'), false);
+  show($('screen-pause'), false);
+  show($('screen-levels'), false);
+}
+
+
+
+function respawn(){
+  const b = G.ball;
+  b.x = G.checkpoint.x; b.y = G.checkpoint.y;
+  b.vx = 0; b.vy = 0; b.spawnT = 0.35;
+  Input.reset();
+  G.cr = initCrumble(G.L);                     // 崩塌板全场复位（宽恕：死亡不消耗地图）
+  G.fogFlash = G.L.fog ? Math.min(PHYS.FOG_FLASH, 1.6) : 0;  // 迷雾关：短闪重新定向
+  G.state = 'playing';
+}
+
+function fallInHole(h){
+  G.state = 'falling';
+  G.fall = { t:0, hx:h.x, hy:h.y };
+  G.deaths++;
+  AU.fall();
+}
+
+function winLevel(){
+  G.state = 'win';
+  G.winT = 0;
+  AU.win();
+  burst(G.L.goal.x, G.L.goal.y, '#3ddc97', 26);
+}
+
+function showClearScreen(){
+  const isLast = G.levelN >= TOTAL_LEVELS;
+  // 累计 + 存档 + 解锁下一关
+  G.totals.time += G.time;
+  G.totals.deaths += G.deaths;
+  G.totals.stars += G.starsGot;
+  saveBest(G.levelN, G.time, G.starsGot);
+  const unlock = Math.min(TOTAL_LEVELS, G.levelN + 1);
+  if(unlock > getUnlock()) localStorage.setItem('rotate_maze_unlock', String(unlock));
+  if(isLast){
+    $('end-time').textContent = fmtTime(G.totals.time);
+    $('end-deaths').textContent = String(G.totals.deaths);
+    const es = $('end-stars').children;
+    for(let i=0;i<es.length;i++) es[i].classList.toggle('got', i < G.totals.stars);
+    show($('screen-end'), true);
+    G.state = 'end';
+  } else {
+    const cs = $('clear-stars').children;
+    for(let i=0;i<cs.length;i++) cs[i].classList.toggle('got', i < G.starsGot);
+    $('clear-time').textContent = fmtTime(G.time);
+    $('clear-deaths').textContent = String(G.deaths);
+    const best = loadBest(G.levelN);
+    $('clear-best').textContent = best ? (fmtTime(best.t) + ' / ' + best.s + '★') : '--';
+    show($('screen-clear'), true);
+    G.state = 'clear';
+  }
+  $('banner').classList.remove('show');
+}
+
+/* 暂停：切后台自动暂停 */
+document.addEventListener('visibilitychange', ()=>{
+  if(document.hidden){ Input.reset(); pauseGame(); }
+});
+
+/* ---------- 物理常量 ---------- */
+const PHYS = {
+  ACC: 17.0,                  // 最大重力加速度（格/秒²）v0.8 14.5→17：响应更快
+  DRAG: 3.4, ICE_DRAG: 0.45, // 地面 / 冰面阻尼（冰面 ≈ 地面的 1/7.5，滑行感明显）
+  VMAX: 6.2, ICE_VMAX: 9.5,  // 速度上限（冰面上更滑更快）v0.8 5.4/9.0→6.2/9.5
+  REST: 0.18,                // 撞墙弹性
+  HOLE_R: 0.34, STAR_R: 0.55, GOAL_R: 0.38,
+  MAGNET_R: 0.9, MAGNET_A: 6, // 终点磁吸（宽恕设计）
+  BOOST: 18, BOOST_VMAX: 10, // 弹射带加速度 / 带上限速（离带自然衰减）
+                              // 红线：BOOST > ACC（18 > 17），逆带物理必被推回——单向机关成立
+  PORTAL_R: 0.34,            // 传送门触发半径
+  GATE_HALF: 1.4,            // 闸门半周期：开 1.4s / 关 1.4s，两组反相
+  FOG_FLASH: 2.4             // 迷雾闪现时长（开局/踩检查点）；重生 1.6s
+};
+
+function isIce(x,y){
+  return G.L.ice.has(Math.floor(x)+','+Math.floor(y));
+}
+function holeAt(cx,cy){
+  if(!G.L) return false;
+  for(const h of G.L.holes){
+    if(Math.floor(h.x)===cx && Math.floor(h.y)===cy) return true;
+  }
+  if(G.L.crumble && G.cr){
+    const c = (G.cr[cy] || [])[cx];
+    if(c && c.state===2) return true;            // 崩塌碎格视同洞
+  }
+  return false;
+}
+/* ---------- 崩塌区（L36-40）：踩过的地板会碎裂 ----------
+ * 状态矩阵 G.cr[y][x]：null=墙/安全格（S/G/C/*、弹射带、传送门——永不碎，
+ * 星星与检查点即"安全岛"），{state, t}：0=完好 1=已踩倒计时 2=已碎成洞。
+ * 计时规则：球离开该格后才开始倒数（站格上不计时，防"站格刷新"）；
+ * 碎格=洞（holeAt 生效，掉入即死）；死亡/重生全场复位（宽恕设计）。
+ * ---------------------------------------------------------------- */
+function initCrumble(L){
+  if(!L.crumble) return null;
+  const safe = new Set();
+  const mark = (x,y) => safe.add(Math.floor(x)+','+Math.floor(y));
+  mark(L.start.x, L.start.y);
+  mark(L.goal.x, L.goal.y);
+  L.checks.forEach(c => mark(c.x, c.y));
+  L.stars.forEach(s => mark(s.x, s.y));
+  L.portals.forEach(pr => [pr.a, pr.b].forEach(p => mark(p.x, p.y)));
+  L.boosts.forEach(b => mark(b.x, b.y));
+  const cr = [];
+  for(let y=0;y<L.gh;y++){
+    const row = [];
+    for(let x=0;x<L.gw;x++){
+      row.push((L.grid[y][x]===1 || safe.has(x+','+y)) ? null : {state:0, t:0});
+    }
+    cr.push(row);
+  }
+  return cr;
+}
+function updateCrumble(dt){
+  const L = G.L;
+  if(!L.crumble || !G.cr) return;
+  const b = G.ball;
+  const bx = Math.floor(b.x), by = Math.floor(b.y);
+  const cur = (G.cr[by] || [])[bx];
+  if(cur && cur.state===0){                        // 踩上：武装，离开后开始倒数
+    cur.state = 1; cur.t = L.crumble;
+  }
+  for(let y=0;y<L.gh;y++) for(let x=0;x<L.gw;x++){
+    const c = G.cr[y][x];
+    if(!c || c.state!==1) continue;
+    if(x===bx && y===by) continue;                 // 球所在格不计时
+    c.t -= dt;
+    if(c.t <= 0){
+      c.state = 2; c.t = 0;
+      AU.crumble();
+      burst(x+0.5, y+0.5, '#8fa0c5', 10);
+      FX.shake = Math.max(FX.shake, 5);
+    }
+  }
+}
+/* 闸门：关闭相位 = 实体；球身在门内时暂不固化（防压死，站门内可安全通过） */
+function gateSolid(gt){
+  const closed = (Math.floor(animT / PHYS.GATE_HALF) % 2) === gt.grp;
+  if(!closed) return false;
+  /* 防压死：仅当球心已进入门格才暂不固化放行（让它离开）；
+   * 贴边触碰时仍是实体。v0.6 旧实现用"圆与格重叠即软化"，
+   * 与碰撞判定（重叠才推出）互斥 → 关闭的闸门从未真正挡住过球 */
+  return !(G.ball.x >= gt.x && G.ball.x <= gt.x+1 &&
+           G.ball.y >= gt.y && G.ball.y <= gt.y+1);
+}
+function solidAt(cx,cy){
+  if(!G.L || cx<0 || cy<0 || cx>=G.L.gw || cy>=G.L.gh) return true;
+  if(G.L.grid[cy][cx] === 1) return true;
+  const gt = G.L.gateMap && G.L.gateMap.get(cx+','+cy);
+  if(gt && gateSolid(gt)) return true;
+  return false;
+}
+
+/* 圆 vs 矩形（返回推出法向与深度，或 null） */
+function circleRect(bx,by,r, rx,ry,rw,rh){
+  const cx = clamp(bx, rx, rx+rw), cy = clamp(by, ry, ry+rh);
+  const dx = bx-cx, dy = by-cy;
+  const d2 = dx*dx + dy*dy;
+  if(d2 > r*r) return null;
+  if(d2 < 1e-9){                       // 圆心陷入矩形：沿最浅轴推出
+    const l = bx-rx, rgt = rx+rw-bx, t = by-ry, btm = ry+rh-by;
+    const m = Math.min(l,rgt,t,btm);
+    if(m===l)   return {nx:-1, ny:0, depth:r+l};
+    if(m===rgt) return {nx:1,  ny:0, depth:r+rgt};
+    if(m===t)   return {nx:0,  ny:-1, depth:r+t};
+    return {nx:0, ny:1, depth:r+btm};
+  }
+  const d = Math.sqrt(d2);
+  return {nx:dx/d, ny:dy/d, depth:r-d};
+}
+
+function collideWalls(){
+  const b = G.ball;
+  const x0 = Math.floor(b.x-b.r), x1 = Math.floor(b.x+b.r);
+  const y0 = Math.floor(b.y-b.r), y1 = Math.floor(b.y+b.r);
+  for(let cy=y0; cy<=y1; cy++) for(let cx=x0; cx<=x1; cx++){
+    if(!solidAt(cx,cy)) continue;
+    const hit = circleRect(b.x, b.y, b.r, cx, cy, 1, 1);
+    if(!hit) continue;
+    b.x += hit.nx*hit.depth; b.y += hit.ny*hit.depth;
+    const vn = b.vx*hit.nx + b.vy*hit.ny;
+    if(vn < 0){
+      b.vx -= hit.nx*vn*(1+PHYS.REST);
+      b.vy -= hit.ny*vn*(1+PHYS.REST);
+      const imp = -vn;
+      if(imp > 1.3){
+        AU.bump(Math.min(1, imp/6));
+        FX.shake = Math.max(FX.shake, Math.min(6, imp*0.8));
+      }
+    }
+  }
+}
+
+/* ---------- 巡逻块（三角波往返） ---------- */
+function tri01(u){ u -= Math.floor(u); return u < 0.5 ? u*2 : 2-u*2; }
+function updateHazards(dt, t){
+  if(!G.L) return;
+  for(const h of G.L.hazards){
+    const u = h.ph + t / h.T;
+    h.x = h.x0 + (h.x1 - h.x0) * tri01(u);
+    const dir = (u - Math.floor(u)) < 0.5 ? 1 : -1;
+    h.vx = (h.x1 - h.x0) * 2 / h.T * dir;
+    h.cool = Math.max(0, h.cool - dt);
+  }
+}
+function collideHazards(){
+  const b = G.ball;
+  for(const h of G.L.hazards){
+    const hit = circleRect(b.x, b.y, b.r, h.x, h.y, h.w, h.h);
+    if(!hit) continue;
+    b.x += hit.nx*hit.depth; b.y += hit.ny*hit.depth;
+    if(h.cool <= 0){
+      h.cool = 0.45;
+      const kick = 4.2;                             // 弹飞：法向冲量 + 块速度带动
+      b.vx = hit.nx*(kick + Math.abs(h.vx)*0.7) + h.vx*0.7;
+      b.vy = hit.ny*kick;
+      AU.hazard();
+      FX.shake = 9; FX.flash = 0.35;
+      burst(b.x, b.y, '#ff6b6b', 10);
+    }
+  }
+}
+
+/* ---------- 主物理步进 ---------- */
+function physics(dt){
+  const b = G.ball, L = G.L;
+  const ice = isIce(b.x, b.y);
+  const drag = ice ? PHYS.ICE_DRAG : PHYS.DRAG;
+  let vmax = ice ? PHYS.ICE_VMAX : PHYS.VMAX;
+
+  // 屏幕重力 (0, ACC) 经 R(-angle) 投影到地图坐标；大小恒定。
+  // 小球、机关与碰撞均在地图坐标中模拟，保留原版滚动与阻尼手感。
+  b.vx += Math.sin(G.angle) * PHYS.ACC * dt;
+  b.vy += Math.cos(G.angle) * PHYS.ACC * dt;
+
+  // 弹射带：踏上沿箭头加速，临时放宽限速（离带后自然衰减）
+  const bcx = Math.floor(b.x), bcy = Math.floor(b.y);
+  for(const bp of L.boosts){
+    bp.cool = Math.max(0, bp.cool - dt);
+    if(Math.floor(bp.x) === bcx && Math.floor(bp.y) === bcy){
+      b.vx += bp.dx * PHYS.BOOST * dt;
+      b.vy += bp.dy * PHYS.BOOST * dt;
+      vmax = PHYS.BOOST_VMAX;
+      if(bp.cool <= 0){ bp.cool = 0.5; AU.boost(); }
+    }
+  }
+
+  // 终点磁吸
+  const gdx = L.goal.x - b.x, gdy = L.goal.y - b.y;
+  const gd = Math.hypot(gdx, gdy);
+  if(gd < PHYS.MAGNET_R && gd > 1e-3){
+    b.vx += gdx/gd * PHYS.MAGNET_A * dt;
+    b.vy += gdy/gd * PHYS.MAGNET_A * dt;
+  }
+
+  // 阻尼 + 限速
+  b.vx -= b.vx * drag * dt;
+  b.vy -= b.vy * drag * dt;
+  const sp = Math.hypot(b.vx, b.vy);
+  if(sp > vmax){ b.vx *= vmax/sp; b.vy *= vmax/sp; }
+
+  // 积分（细分步防穿墙）
+  const steps = Math.max(1, Math.ceil(dt/0.008));
+  const sdt = dt/steps;
+  for(let i=0;i<steps;i++){
+    b.x += b.vx*sdt; b.y += b.vy*sdt;
+    collideWalls();
+    collideHazards();
+  }
+
+  // 传送门：进入即瞬移到配对出口（速度保留），全局冷却防回环
+  if(G.portalCd > 0) G.portalCd -= dt;
+  if(G.portalCd <= 0){
+    outer:
+    for(const pr of L.portals){
+      for(const [from, to] of [[pr.a, pr.b], [pr.b, pr.a]]){
+        if(Math.hypot(from.x-b.x, from.y-b.y) >= PHYS.PORTAL_R) continue;
+        const sp = Math.hypot(b.vx, b.vy);
+        let ox = 0, oy = 0;
+        if(sp > 0.6){ ox = b.vx/sp*0.55; oy = b.vy/sp*0.55; }
+        else {
+          for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+            const nx = Math.floor(to.x)+dx, ny = Math.floor(to.y)+dy;
+            if(!solidAt(nx,ny) && !holeAt(nx,ny)){ ox = dx*0.55; oy = dy*0.55; break; }
+          }
+        }
+        if(solidAt(Math.floor(to.x+ox), Math.floor(to.y+oy)) ||
+           holeAt(Math.floor(to.x+ox), Math.floor(to.y+oy))){
+          ox = 0; oy = 0;                            // 出口被堵/临洞：退回门中心
+        }
+        burst(from.x, from.y, pr.col, 10);
+        b.x = to.x + ox; b.y = to.y + oy;
+        G.portalCd = 0.8;
+        FX.trail.length = 0;
+        burst(to.x, to.y, pr.col, 14);
+        AU.portal();
+        break outer;
+      }
+    }
+  }
+
+  // ---- 拾取 ----
+  for(const s of L.stars){
+    if(!s.got && Math.hypot(s.x-b.x, s.y-b.y) < PHYS.STAR_R){
+      s.got = true; G.starsGot++;
+      AU.star(); burst(s.x, s.y, '#ffd54a', 14);
+      updateHudStars();
+    }
+  }
+  for(const c of L.checks){
+    if(!c.active && Math.hypot(c.x-b.x, c.y-b.y) < 0.5){
+      c.active = true;
+      G.checkpoint = {x:c.x, y:c.y};
+      if(L.fog) G.fogFlash = PHYS.FOG_FLASH;   // 深渊关：检查点点亮全图（闪现）
+      AU.check(); toast('✔ 检查点已激活');
+      burst(c.x, c.y, '#7be08a', 12);
+    }
+  }
+  for(const h of L.holes){
+    if(Math.hypot(h.x-b.x, h.y-b.y) < PHYS.HOLE_R){ fallInHole(h); return; }
+  }
+  if(L.crumble && G.cr){                        // 崩塌碎格：与洞同判定
+    const c = (G.cr[Math.floor(b.y)] || [])[Math.floor(b.x)];
+    if(c && c.state===2){
+      fallInHole({x:Math.floor(b.x)+0.5, y:Math.floor(b.y)+0.5});
+      return;
+    }
+  }
+  const gd2 = Math.hypot(L.goal.x-b.x, L.goal.y-b.y);
+  if(gd2 < PHYS.GOAL_R) winLevel();
+}
+
+/* ---------- 特效：粒子 / 震屏 / 闪光 / 轨迹 ---------- */
+const FX = { shake:0, flash:0, parts:[], trail:[] };
+function burst(x,y,color,n){
+  for(let i=0;i<n;i++){
+    const a = Math.random()*TAU, sp = 1.5 + Math.random()*3;
+    FX.parts.push({x, y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp,
+      life:0.5+Math.random()*0.3, t:0, color, r:0.05+Math.random()*0.06});
+  }
+}
+function updateFX(dt){
+  FX.shake = Math.max(0, FX.shake - dt*18);
+  FX.flash = Math.max(0, FX.flash - dt*1.4);
+  if(G.fogFlash > 0) G.fogFlash = Math.max(0, G.fogFlash - dt);   // 迷雾闪现渐收回
+  const f = Math.exp(-3.5*dt);
+  for(let i=FX.parts.length-1; i>=0; i--){
+    const p = FX.parts[i];
+    p.t += dt;
+    if(p.t >= p.life){ FX.parts.splice(i,1); continue; }
+    p.x += p.vx*dt; p.y += p.vy*dt;
+    p.vx *= f; p.vy *= f;
+  }
+}
+
+/* ---------- 渲染 ---------- */
+function starPath(c, x, y, R, rot){
+  c.beginPath();
+  for(let i=0;i<10;i++){
+    const r = (i%2===0) ? R : R*0.45;
+    const a = rot + i*Math.PI/5 - Math.PI/2;
+    const px = x+Math.cos(a)*r, py = y+Math.sin(a)*r;
+    if(i===0) c.moveTo(px,py); else c.lineTo(px,py);
+  }
+  c.closePath();
+}
+function rr(x,y,w,h,r){
+  ctx.beginPath();
+  if(ctx.roundRect){ ctx.roundRect(x,y,w,h,r); return; }
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);     ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+function drawFloor(){
+  const L = G.L;
+  for(let y=0;y<L.gh;y++) for(let x=0;x<L.gw;x++){
+    if(L.grid[y][x]===1) continue;
+    ctx.fillStyle = ((x+y)&1) ? '#1c2637' : '#1a2334';
+    ctx.fillRect(ox+x*cell, oy+y*cell, cell+0.5, cell+0.5);
+  }
+}
+function drawIce(t){
+  for(const k of G.L.ice){
+    const p = k.split(','), x = +p[0], y = +p[1];
+    const sx = ox+x*cell, sy = oy+y*cell;
+    ctx.fillStyle = '#2d5b93';                          // 冰面亮蓝（v0.7 提高辨识度）
+    ctx.fillRect(sx, sy, cell+0.5, cell+0.5);
+    ctx.strokeStyle = 'rgba(190,230,255,0.30)';         // 冰裂纹
+    ctx.lineWidth = Math.max(1.5, cell*0.045);
+    ctx.beginPath();
+    ctx.moveTo(sx+cell*0.15, sy+cell*0.85); ctx.lineTo(sx+cell*0.85, sy+cell*0.15);
+    ctx.moveTo(sx+cell*0.45, sy+cell*0.95); ctx.lineTo(sx+cell*0.95, sy+cell*0.45);
+    ctx.stroke();
+    if(t !== undefined){                                // 缓慢扫过的斜向流光
+      const ph = (t*0.35 + (x*0.37+y*0.61)) % 2;
+      const al = Math.max(0, Math.sin(ph*Math.PI)) * 0.22;
+      ctx.fillStyle = 'rgba(215,240,255,' + al.toFixed(2) + ')';
+      ctx.beginPath();
+      ctx.moveTo(sx+cell*0.06, sy+cell*0.94);
+      ctx.lineTo(sx+cell*0.94, sy+cell*0.06);
+      ctx.lineTo(sx+cell*0.94, sy+cell*0.30);
+      ctx.lineTo(sx+cell*0.06, sy+cell*0.70);
+      ctx.closePath(); ctx.fill();
+    }
+  }
+}
+function drawCrumble(t){
+  const L = G.L;
+  if(!L.crumble || !G.cr) return;
+  for(let y=0;y<L.gh;y++) for(let x=0;x<L.gw;x++){
+    const c = G.cr[y][x];
+    if(!c || c.state===0) continue;
+    const sx = ox+x*cell, sy = oy+y*cell;
+    if(c.state===2){                              // 已碎：黑洞（与原生洞同观感）
+      const r = cell*0.44;
+      const g = ctx.createRadialGradient(sx+cell/2, sy+cell/2, r*0.15, sx+cell/2, sy+cell/2, r);
+      g.addColorStop(0, '#04060c'); g.addColorStop(1, '#0b1122');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(sx+cell/2, sy+cell/2, r, 0, TAU); ctx.fill();
+      ctx.strokeStyle = 'rgba(217,70,62,0.45)';   // 崩塌洞描边泛红（可辨识来源）
+      ctx.lineWidth = Math.max(1.5, cell*0.05);
+      ctx.beginPath(); ctx.arc(sx+cell/2, sy+cell/2, r, 0, TAU); ctx.stroke();
+    } else {                                      // 倒计时：裂纹加深 + 抖动 + 泛红
+      const p = 1 - clamp(c.t / L.crumble, 0, 1);
+      const jx = (Math.random()-0.5)*p*cell*0.07;
+      const jy = (Math.random()-0.5)*p*cell*0.07;
+      ctx.fillStyle = 'rgba(214,96,72,' + (0.07 + p*0.32).toFixed(2) + ')';
+      ctx.fillRect(sx+jx, sy+jy, cell+0.5, cell+0.5);
+      ctx.strokeStyle = 'rgba(30,16,14,' + (0.25 + p*0.55).toFixed(2) + ')';
+      ctx.lineWidth = Math.max(1.2, cell*0.045);
+      ctx.beginPath();
+      ctx.moveTo(sx+cell*0.14+jx, sy+cell*0.86+jy);
+      ctx.lineTo(sx+cell*0.55+jx, sy+cell*0.34+jy);
+      ctx.lineTo(sx+cell*0.88+jx, sy+cell*0.60+jy);
+      if(p > 0.35){
+        ctx.moveTo(sx+cell*0.18+jx, sy+cell*0.30+jy);
+        ctx.lineTo(sx+cell*0.48+jx, sy+cell*0.56+jy);
+      }
+      ctx.stroke();
+    }
+  }
+}
+function drawHoles(){
+  for(const h of G.L.holes){
+    const sx = ox+h.x*cell, sy = oy+h.y*cell, r = cell*0.44;
+    const g = ctx.createRadialGradient(sx,sy,r*0.15, sx,sy,r);
+    g.addColorStop(0, '#04060c'); g.addColorStop(1, '#0b1122');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(sx,sy,r,0,TAU); ctx.fill();
+    ctx.strokeStyle = 'rgba(100,120,170,0.4)';
+    ctx.lineWidth = Math.max(1.5, cell*0.05);
+    ctx.beginPath(); ctx.arc(sx,sy,r,0,TAU); ctx.stroke();
+  }
+}
+function drawChecks(t){
+  for(const c of G.L.checks){
+    const sx = ox+c.x*cell, sy = oy+c.y*cell;
+    const col = c.active ? '#7be08a' : '#5a6785';
+    ctx.save();
+    if(c.active){ ctx.shadowColor='rgba(123,224,138,0.85)'; ctx.shadowBlur=10; }
+    ctx.strokeStyle = col; ctx.lineWidth = Math.max(2, cell*0.06);
+    ctx.beginPath(); ctx.arc(sx,sy,cell*0.28,0,TAU); ctx.stroke();
+    if(c.active){ ctx.fillStyle=col; ctx.beginPath(); ctx.arc(sx,sy,cell*0.09,0,TAU); ctx.fill(); }
+    ctx.restore();
+  }
+}
+function drawGoal(t){
+  const gl = G.L.goal;
+  const sx = ox+gl.x*cell, sy = oy+gl.y*cell;
+  const pul = 0.40 + 0.045*Math.sin(t*2.6) + (G.state==='win'?0.08:0);
+  ctx.save();
+  ctx.shadowColor = 'rgba(61,220,151,0.8)'; ctx.shadowBlur = 16;
+  ctx.strokeStyle = '#3ddc97'; ctx.lineWidth = Math.max(2.5, cell*0.07);
+  ctx.beginPath(); ctx.arc(sx,sy,pul*cell,0,TAU); ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = 'rgba(61,220,151,0.20)';
+  ctx.beginPath(); ctx.arc(sx,sy,pul*cell*0.72,0,TAU); ctx.fill();
+  ctx.fillStyle = '#3ddc97';
+  ctx.beginPath(); ctx.arc(sx,sy,cell*0.15,0,TAU); ctx.fill();
+  ctx.restore();
+}
+function drawStars(t){
+  G.L.stars.forEach((s,i)=>{
+    if(s.got) return;
+    const sx = ox+s.x*cell, sy = oy+s.y*cell;
+    const R = cell*0.24*(1 + 0.09*Math.sin(t*3 + i*1.7));
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,213,74,0.9)'; ctx.shadowBlur = 12;
+    ctx.fillStyle = '#ffd54a';
+    starPath(ctx, sx, sy, R, t*0.7 + i);
+    ctx.fill();
+    ctx.restore();
+  });
+}
+function drawPortals(t){
+  G.L.portals.forEach((pr, i) => {
+    [pr.a, pr.b].forEach(p => {
+      const sx = ox+p.x*cell, sy = oy+p.y*cell;
+      ctx.save();
+      ctx.globalAlpha = 0.16; ctx.fillStyle = pr.col;
+      ctx.beginPath(); ctx.arc(sx, sy, cell*0.38, 0, TAU); ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.shadowColor = pr.col; ctx.shadowBlur = 12;
+      ctx.strokeStyle = pr.col;
+      ctx.lineWidth = Math.max(2, cell*0.06);
+      ctx.setLineDash([cell*0.22, cell*0.15]);
+      ctx.lineDashOffset = -t*cell*0.9;
+      ctx.beginPath(); ctx.arc(sx, sy, cell*0.33, 0, TAU); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 0.55;
+      ctx.beginPath(); ctx.arc(sx, sy, cell*0.17, 0, TAU); ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+      const a = t*2.6 + i*2.1;
+      ctx.fillStyle = pr.col;
+      ctx.beginPath();
+      ctx.arc(sx+Math.cos(a)*cell*0.24, sy+Math.sin(a)*cell*0.24, cell*0.05, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    });
+  });
+}
+function drawBoosts(t){
+  for(const bp of G.L.boosts){
+    const sx = ox+bp.x*cell, sy = oy+bp.y*cell;
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(Math.atan2(bp.dy, bp.dx));
+    ctx.fillStyle = 'rgba(255,177,77,0.13)';
+    rr(-cell*0.5, -cell*0.32, cell, cell*0.64, cell*0.12);
+    ctx.fill();
+    for(let i=0; i<3; i++){
+      const phase = (t*1.5 + i/3) % 1;                // 滚动相位
+      const px = (phase - 0.5) * cell * 0.8;
+      const al = Math.sin(phase * Math.PI);            // 两端淡出
+      ctx.strokeStyle = 'rgba(255,177,77,' + (0.22 + al*0.6).toFixed(2) + ')';
+      ctx.lineWidth = Math.max(2, cell*0.08);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(px - cell*0.10, -cell*0.15);
+      ctx.lineTo(px + cell*0.10, 0);
+      ctx.lineTo(px - cell*0.10, cell*0.15);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+function drawGates(t){
+  const half = PHYS.GATE_HALF;
+  for(const gt of G.L.gates){
+    const closed = gateSolid(gt);
+    const sx = ox+gt.x*cell, sy = oy+gt.y*cell;
+    const remain = half - (t % half);                  // 距下次开合
+    const blink = remain < 0.35 ? (0.55 + 0.45*Math.sin(t*18)) : 1;
+    ctx.save();
+    ctx.globalAlpha = closed ? (0.62 + 0.38*blink) : (0.28 + 0.30*blink);
+    if(closed){
+      ctx.shadowColor = 'rgba(232,163,61,0.55)'; ctx.shadowBlur = 10;
+      ctx.fillStyle = '#e8a33d';
+      rr(sx+cell*0.06, sy+cell*0.08, cell*0.88, cell*0.84, cell*0.10);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.save();                                      // 警示斜纹
+      rr(sx+cell*0.06, sy+cell*0.08, cell*0.88, cell*0.84, cell*0.10);
+      ctx.clip();
+      ctx.strokeStyle = 'rgba(70,45,12,0.55)';
+      ctx.lineWidth = Math.max(2, cell*0.07);
+      for(let s=-1; s<2; s+=0.25){
+        ctx.beginPath();
+        ctx.moveTo(sx+s*cell, sy+cell);
+        ctx.lineTo(sx+s*cell+cell, sy);
+        ctx.stroke();
+      }
+      ctx.restore();
+    } else {
+      ctx.strokeStyle = '#e8a33d';
+      ctx.lineWidth = Math.max(1.5, cell*0.05);
+      ctx.setLineDash([cell*0.16, cell*0.11]);
+      rr(sx+cell*0.10, sy+cell*0.12, cell*0.80, cell*0.76, cell*0.10);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(232,163,61,0.6)';          // 门柱
+      ctx.fillRect(sx+cell*0.06, sy+cell*0.08, cell*0.10, cell*0.84);
+      ctx.fillRect(sx+cell*0.84, sy+cell*0.08, cell*0.10, cell*0.84);
+    }
+    ctx.restore();
+  }
+}
+function drawWalls(){
+  const L = G.L;
+  ctx.fillStyle = 'rgba(0,0,0,0.30)';               // 墙投影
+  for(let y=0;y<L.gh;y++) for(let x=0;x<L.gw;x++){
+    if(L.grid[y][x]!==1) continue;
+    ctx.fillRect(ox+x*cell, oy+y*cell + cell*0.14, cell+0.5, cell+0.5);
+  }
+  ctx.fillStyle = '#46587e';                        // 墙体
+  for(let y=0;y<L.gh;y++) for(let x=0;x<L.gw;x++){
+    if(L.grid[y][x]!==1) continue;
+    ctx.fillRect(ox+x*cell, oy+y*cell, cell+0.5, cell+0.5);
+  }
+  for(let y=0;y<L.gh;y++) for(let x=0;x<L.gw;x++){  // 倒角高光
+    if(L.grid[y][x]!==1) continue;
+    const sx = ox+x*cell, sy = oy+y*cell;
+    if(!solidAt(x,y-1)){ ctx.fillStyle='#5d729e'; ctx.fillRect(sx, sy, cell+0.5, cell*0.12); }
+    if(!solidAt(x,y+1)){ ctx.fillStyle='#39476b'; ctx.fillRect(sx, sy+cell*0.88, cell+0.5, cell*0.12+0.5); }
+    if(!solidAt(x-1,y)){ ctx.fillStyle='#526493'; ctx.fillRect(sx, sy, cell*0.08, cell+0.5); }
+    if(!solidAt(x+1,y)){ ctx.fillStyle='#3c4b6f'; ctx.fillRect(sx+cell*0.92, sy, cell*0.08, cell+0.5); }
+  }
+}
+function drawHazards(){
+  for(const h of G.L.hazards){
+    const x = ox+h.x*cell, y = oy+h.y*cell, w = h.w*cell, ht = h.h*cell;
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,80,80,0.5)'; ctx.shadowBlur = 12;
+    ctx.fillStyle = '#d9463e';
+    rr(x,y,w,ht,cell*0.10); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.save();                                     // 警示斜纹
+    rr(x,y,w,ht,cell*0.10); ctx.clip();
+    ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+    ctx.lineWidth = Math.max(2, cell*0.06);
+    for(let s=-h.h; s<h.w+h.h; s+=0.22){
+      ctx.beginPath();
+      ctx.moveTo(x+s*cell, y+ht+4);
+      ctx.lineTo(x+s*cell+ht+4, y-4);
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.strokeStyle = '#ff9a8a'; ctx.lineWidth = 1.5;
+    rr(x,y,w,ht,cell*0.10); ctx.stroke();
+    ctx.restore();
+  }
+}
+function drawParticles(){
+  for(const p of FX.parts){
+    ctx.globalAlpha = clamp(1 - p.t/p.life, 0, 1);
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(ox+p.x*cell, oy+p.y*cell, Math.max(1, p.r*cell), 0, TAU);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+function drawTrail(){
+  const n = FX.trail.length;
+  for(let i=0;i<n;i++){
+    const p = FX.trail[i], f = (i+1)/n;
+    ctx.globalAlpha = f*0.20;
+    ctx.fillStyle = '#ffb14d';
+    ctx.beginPath();
+    ctx.arc(ox+p.x*cell, oy+p.y*cell, G.ball.r*cell*f*0.8, 0, TAU);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+function drawBall(){
+  const b = G.ball;
+  let scale = 1, alpha = 1;
+  if(G.state==='falling'){
+    const k = clamp(G.fall.t/0.55, 0, 1);
+    scale = 1 - k*0.9; alpha = 1 - k;
+  } else if(b.spawnT > 0){
+    scale = 1 - (b.spawnT/0.35)*0.6;
+  } else if(G.state==='win'){
+    scale = 1 + Math.sin(G.winT*10)*0.06;
+  }
+  if(alpha <= 0.02) return;
+  drawTrail();
+  const sx = ox+b.x*cell, sy = oy+b.y*cell;
+  const r = Math.max(1, b.r*cell*scale);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.beginPath(); ctx.ellipse(sx, sy+r*0.35, r*1.0, r*0.55, 0, 0, TAU); ctx.fill();
+  const g = ctx.createRadialGradient(sx-r*0.35, sy-r*0.4, r*0.1, sx, sy, r);
+  g.addColorStop(0,'#ffe3a3'); g.addColorStop(0.55,'#ff9d3d'); g.addColorStop(1,'#d96f1a');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(sx,sy,r,0,TAU); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.beginPath(); ctx.ellipse(sx-r*0.32, sy-r*0.38, r*0.22, r*0.14, -0.6, 0, TAU); ctx.fill();
+  ctx.restore();
+}
+
+/* ---------- 深渊迷雾：视野遮罩 + 灯塔 ----------
+ * 全图黑暗，只有球周围 R 格可见（径向渐变）；闪现期（开局/踩检查点/重生）
+ * 视野扩到全图渐收回。终点/星星/检查点为"灯塔"——遮罩之上恒可见的微光，
+ * 黑暗中给方向感：路径自己探，目标永远亮着。
+ * ------------------------------------------------ */
+function beacon(x, y, col, alpha){
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.shadowColor = col; ctx.shadowBlur = 14;
+  ctx.fillStyle = col;
+  ctx.beginPath(); ctx.arc(x, y, Math.max(2, cell*0.10), 0, TAU); ctx.fill();
+  ctx.globalAlpha = alpha*0.35;
+  ctx.beginPath(); ctx.arc(x, y, Math.max(3, cell*0.22), 0, TAU); ctx.fill();
+  ctx.restore();
+}
+function drawFog(t){
+  const L = G.L;
+  if(!L.fog) return;
+  if(G.state==='win' || G.state==='clear') return;   // 过关瞬间雾散，全图亮起
+  const b = G.ball;
+  let R = L.fog;
+  if(G.fogFlash > 0){                             // 闪现：全图视野平滑收回
+    const k = clamp(G.fogFlash / PHYS.FOG_FLASH, 0, 1);
+    R = L.fog + (Math.max(L.gw, L.gh) - L.fog) * (k*(2-k));   // easeOut
+  }
+  const px = ox+b.x*cell, py = oy+b.y*cell;
+  const r1 = Math.max(2, R*cell);
+  const g = ctx.createRadialGradient(px, py, Math.max(1, r1*0.5), px, py, r1);
+  g.addColorStop(0, 'rgba(4,7,15,0)');
+  g.addColorStop(0.72, 'rgba(4,7,15,0.62)');
+  g.addColorStop(1, 'rgba(4,7,15,0.985)');
+  ctx.fillStyle = g;
+  ctx.fillRect(ox, oy, L.gw*cell, L.gh*cell);
+  beacon(ox+L.goal.x*cell, oy+L.goal.y*cell, '#3ddc97', 0.85+0.15*Math.sin(t*2.2));
+  L.stars.forEach((s, i) => {
+    if(!s.got) beacon(ox+s.x*cell, oy+s.y*cell, '#ffd54a', 0.75+0.25*Math.sin(t*2.8+i*1.9));
+  });
+  L.checks.forEach(c => {
+    beacon(ox+c.x*cell, oy+c.y*cell, c.active ? '#7be08a' : '#9fb0d0', 0.6+0.18*Math.sin(t*1.8));
+  });
+}
+
+function drawInputVisuals(){
+  $('rotation-controls').hidden = !G.L || !['playing','intro'].includes(G.state);
+  const degrees=((G.angle*180/Math.PI)%360+360)%360;
+  $('rotation-angle').textContent=(Math.round(degrees)%360)+'°';
+}
+
+let vign = null, vignW = 0, vignH = 0;
+function drawVignette(){
+  if(!vign || vignW!==W || vignH!==H){
+    vignW = W; vignH = H;
+    vign = ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*0.42, W/2,H/2,Math.hypot(W,H)*0.6);
+    vign.addColorStop(0,'rgba(0,0,0,0)');
+    vign.addColorStop(1,'rgba(0,0,0,0.42)');
+  }
+  ctx.fillStyle = vign; ctx.fillRect(0,0,W,H);
+}
+
+function render(t){
+  ctx.fillStyle = '#0d1220'; ctx.fillRect(0,0,W,H);
+  if(!G.L){ drawVignette(); return; }
+  ctx.save();
+  if(FX.shake > 0.2) ctx.translate((Math.random()-0.5)*FX.shake, (Math.random()-0.5)*FX.shake);
+  const cx=ox+G.L.gw*cell/2, cy=oy+G.L.gh*cell/2;
+  ctx.translate(cx,cy); ctx.rotate(G.angle); ctx.translate(-cx,-cy);
+  drawFloor();
+  drawIce(t);
+  drawCrumble(t);
+  drawHoles();
+  drawChecks(t);
+  drawGoal(t);
+  drawStars(t);
+  drawPortals(t);
+  drawBoosts(t);
+  drawWalls();
+  drawHazards();
+  drawGates(t);
+  drawParticles();
+  drawBall();
+  drawFog(t);
+  ctx.restore();
+  drawInputVisuals();
+  if(FX.flash > 0){
+    ctx.fillStyle = 'rgba(255,90,90,' + (FX.flash*0.30).toFixed(3) + ')';
+    ctx.fillRect(0,0,W,H);
+  }
+  drawVignette();
+}
+
+/* ---------- 主循环 ---------- */
+let lastT = performance.now(), animT = 0;
+function frame(now){
+  requestAnimationFrame(frame);
+  let dt = (now - lastT)/1000; lastT = now;
+  dt = clamp(dt, 0, 0.05);
+  if(['intro','playing','falling','win'].includes(G.state)) animT += dt;
+  Input.update(dt);
+  if(['intro','playing','falling','win'].includes(G.state)) updateHazards(dt, animT);
+  switch(G.state){
+    case 'intro':
+      G.introT -= dt;
+      if(G.introT <= 0){ $('banner').classList.remove('show'); G.state='playing'; }
+      break;
+
+
+    case 'playing':
+      G.time += dt;
+      if(G.ball.spawnT > 0) G.ball.spawnT = Math.max(0, G.ball.spawnT - dt);
+      physics(dt);
+      updateCrumble(dt);
+      $('hud-timer').textContent = fmtTime(G.time);
+      FX.trail.push({x:G.ball.x, y:G.ball.y});
+      if(FX.trail.length > 14) FX.trail.shift();
+      break;
+    case 'falling': {
+      G.fall.t += dt;
+      const b = G.ball;
+      b.x = lerp(b.x, G.fall.hx, clamp(10*dt,0,1));
+      b.y = lerp(b.y, G.fall.hy, clamp(10*dt,0,1));
+      if(G.fall.t >= 0.55) respawn();
+      break;
+    }
+    case 'win': {
+      G.winT += dt;
+      const b = G.ball, gl = G.L.goal;
+      b.x = lerp(b.x, gl.x, clamp(6*dt,0,1));
+      b.y = lerp(b.y, gl.y, clamp(6*dt,0,1));
+      b.vx *= 0.9; b.vy *= 0.9;
+      if(G.winT >= 1.0) showClearScreen();
+      break;
+    }
+  }
+  updateFX(dt);
+  render(animT);
+}
+
+/* ---------- 按钮绑定 ---------- */
+$('btn-start').addEventListener('click', ()=>{
+  AU.init(); AU.click(); startGame();
+});
+$('btn-pause').addEventListener('click',pauseGame);
+
+$('btn-next').addEventListener('click',   ()=>{ AU.click(); gotoLevel(G.levelN+1); });
+$('btn-replay').addEventListener('click', ()=>{ AU.click(); gotoLevel(G.levelN); });
+$('btn-select').addEventListener('click', ()=>{ AU.click(); openLevelSelect(); });
+$('btn-again').addEventListener('click',  ()=>{ AU.click(); startGame(); });
+$('btn-lv-back').addEventListener('click', ()=>{
+  AU.click();
+  show($('screen-levels'), false);
+  show($('screen-start'), true);
+});
+$('btn-levels').addEventListener('click', ()=>{ AU.click(); openLevelSelect(); });
+$('btn-resume').addEventListener('click', ()=>{
+  AU.click();
+  show($('screen-pause'), false);
+  Input.reset(); G.state = 'playing';
+});
+$('btn-restart').addEventListener('click', ()=>{ AU.click(); if(G.L) gotoLevel(G.levelN); });
+$('btn-sound').addEventListener('click', ()=>{
+  AU.on = !AU.on;
+  localStorage.setItem('rotate_maze_sound', AU.on?'1':'0');
+  $('btn-sound').textContent = AU.on ? '♪' : '×';
+  if(AU.on){ AU.init(); AU.click(); }
+});
+
+
+/* ---------- 启动 ---------- */
+$('btn-sound').textContent = AU.on ? '♪' : '×';
+resize();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
