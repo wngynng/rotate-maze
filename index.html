@@ -91,6 +91,10 @@ h1{font-size:30px;letter-spacing:2px;margin-bottom:6px;
 #rotation-controls strong{display:block;color:#7fe3b0;font-size:14px}
 #rotation-controls span{display:block;color:#ffd98f;font-size:17px;font-variant-numeric:tabular-nums}
 #rotation-controls small{color:#8fa0c5;font-size:11px}
+body.time-stop{filter:grayscale(1)}
+#rotation-controls #btn-time-stop{display:block;width:120px;height:30px;margin-top:5px;border-radius:9px;font-size:13px;color:#e8edf7}
+#rotation-controls #btn-time-stop[aria-pressed="true"]{background:#dce3ef;color:#172033;border-color:#fff}
+#rotation-controls #btn-time-stop:disabled{opacity:.5;cursor:default}
 .panel{max-height:90dvh;overflow-y:auto;touch-action:pan-y}
 @media(max-width:400px){#hud{gap:4px;padding:0 6px}.pill{padding:6px 7px;font-size:11px}.ibtn{min-width:32px;padding:0 7px}#banner-hint{padding:0 16px}}
 </style>
@@ -128,6 +132,7 @@ h1{font-size:30px;letter-spacing:2px;margin-bottom:6px;
       · 收集 ★，避开机关：黑洞、迷雾、巡逻块、崩塌地板与闸门<br>
       · 按住 ↶ / ↷ 旋转，松开即停；拖动地图也可旋转<br>
       · 电脑用 ← → / A D，Shift 慢转；空格暂停
+      <br>· 按 T 或点击「时停」：世界慢至 5%，地图正常转动
     </div>
   </div>
 </div>
@@ -179,7 +184,7 @@ h1{font-size:30px;letter-spacing:2px;margin-bottom:6px;
 
 <div id="rotation-controls" hidden>
   <button id="rotate-left" aria-label="逆时针旋转">↶</button>
-  <div><strong>↓ 重力向下</strong><span id="rotation-angle">0°</span><small>按住旋转 · 松开停止</small></div>
+  <div><strong>↓ 重力向下</strong><span id="rotation-angle">0°</span><small>按住旋转 · 松开停止</small><button id="btn-time-stop" aria-pressed="false" title="切换时停（T）：小球与机关5%速度，地图转速不变">时停 · T</button></div>
   <button id="rotate-right" aria-label="顺时针旋转">↷</button>
 </div>
 
@@ -1167,7 +1172,18 @@ function pauseGame(){
     Input.reset(); G.state='paused'; show($('screen-pause'),true);
   }
 }
+function toggleTimeStop(){
+  if(G.state!=='playing') return;
+  G.timeStop=!G.timeStop;
+  AU.click();
+  drawInputVisuals();
+}
 window.addEventListener('keydown', e=>{
+  if(e.code==='KeyT'){
+    e.preventDefault();
+    if(!e.repeat) toggleTimeStop();
+    return;
+  }
   if(['ArrowLeft','ArrowRight','Space','KeyA','KeyD'].includes(e.code)) e.preventDefault();
   if(e.code==='Space' && !e.repeat){
     if(G.state==='paused'){ show($('screen-pause'),false); G.state='playing'; }
@@ -1220,7 +1236,7 @@ window.addEventListener('contextmenu',e=>e.preventDefault());
 /* ---------- 游戏状态 ---------- */
 const G = {
   state:'menu',                 // menu|intro|playing|falling|win|clear|end|paused
-  levelN:1, L:null, angle:0,
+  levelN:1, L:null, angle:0, timeStop:false,
   ball:{ x:0, y:0, vx:0, vy:0, r:0.30, spawnT:0 },
   time:0, deaths:0, starsGot:0,
   checkpoint:null,
@@ -1236,7 +1252,7 @@ function layout(){
   if(!G.L) return;
   const styles=getComputedStyle(document.documentElement);
   const top=100+(parseFloat(styles.getPropertyValue('--st'))||0);
-  const bot=104+(parseFloat(styles.getPropertyValue('--sb'))||0);
+  const bot=132+(parseFloat(styles.getPropertyValue('--sb'))||0);
   // 固定使用对角线尺寸，任意角度均不裁切，也不会在旋转时缩放跳动。
   const diameter=Math.max(1,Math.min(W-24,H-top-bot));
   cell=diameter/Math.hypot(G.L.gw,G.L.gh);
@@ -1337,6 +1353,7 @@ $('lv-grid').addEventListener('click', e=>{
 });
 
 function gotoLevel(n){
+  G.timeStop=false;
   n = clamp(n, 1, TOTAL_LEVELS);
   Input.reset(); G.angle=0;
   G.levelN = n;
@@ -1435,6 +1452,7 @@ document.addEventListener('visibilitychange', ()=>{
 
 /* ---------- 物理常量 ---------- */
 const PHYS = {
+  TIME_STOP_SCALE: 0.05,       // 时停：世界5%速度；输入和成绩计时仍使用真实时间
   ACC: 17.0,                  // 最大重力加速度（格/秒²）v0.8 14.5→17：响应更快
   DRAG: 3.4, ICE_DRAG: 0.45, // 地面 / 冰面阻尼（冰面 ≈ 地面的 1/7.5，滑行感明显）
   VMAX: 6.2, ICE_VMAX: 9.5,  // 速度上限（冰面上更滑更快）v0.8 5.4/9.0→6.2/9.5
@@ -2103,6 +2121,11 @@ function drawFog(t){
 }
 
 function drawInputVisuals(){
+  const stopped=G.timeStop && ['playing','paused'].includes(G.state);
+  document.body.classList.toggle('time-stop',stopped);
+  $('btn-time-stop').setAttribute('aria-pressed',String(G.timeStop));
+  $('btn-time-stop').textContent=G.timeStop ? '恢复时间 · T' : '时停 · T';
+  $('btn-time-stop').disabled=G.state!=='playing';
   $('rotation-controls').hidden = !G.L || !['playing','intro'].includes(G.state);
   const degrees=((G.angle*180/Math.PI)%360+360)%360;
   $('rotation-angle').textContent=(Math.round(degrees)%360)+'°';
@@ -2156,9 +2179,11 @@ function frame(now){
   requestAnimationFrame(frame);
   let dt = (now - lastT)/1000; lastT = now;
   dt = clamp(dt, 0, 0.05);
-  if(['intro','playing','falling','win'].includes(G.state)) animT += dt;
+  // 只缩放世界时间，不改变存储速度，切换时不会反复乘速或产生弹射。
+  const worldDt=dt*(G.state==='playing' && G.timeStop ? PHYS.TIME_STOP_SCALE : 1);
+  if(['intro','playing','falling','win'].includes(G.state)) animT += worldDt;
   Input.update(dt);
-  if(['intro','playing','falling','win'].includes(G.state)) updateHazards(dt, animT);
+  if(['intro','playing','falling','win'].includes(G.state)) updateHazards(worldDt, animT);
   switch(G.state){
     case 'intro':
       G.introT -= dt;
@@ -2169,8 +2194,8 @@ function frame(now){
     case 'playing':
       G.time += dt;
       if(G.ball.spawnT > 0) G.ball.spawnT = Math.max(0, G.ball.spawnT - dt);
-      physics(dt);
-      updateCrumble(dt);
+      physics(worldDt);
+      updateCrumble(worldDt);
       $('hud-timer').textContent = fmtTime(G.time);
       FX.trail.push({x:G.ball.x, y:G.ball.y});
       if(FX.trail.length > 14) FX.trail.shift();
@@ -2193,7 +2218,7 @@ function frame(now){
       break;
     }
   }
-  updateFX(dt);
+  updateFX(G.state==='paused' ? 0 : worldDt);
   render(animT);
 }
 
@@ -2202,6 +2227,7 @@ $('btn-start').addEventListener('click', ()=>{
   AU.init(); AU.click(); startGame();
 });
 $('btn-pause').addEventListener('click',pauseGame);
+$('btn-time-stop').addEventListener('click',toggleTimeStop);
 
 $('btn-next').addEventListener('click',   ()=>{ AU.click(); gotoLevel(G.levelN+1); });
 $('btn-replay').addEventListener('click', ()=>{ AU.click(); gotoLevel(G.levelN); });
